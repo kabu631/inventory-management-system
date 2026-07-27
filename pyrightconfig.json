@@ -1,0 +1,12 @@
+{
+  "extraPaths": [
+    "C:/Users/kabin/OneDrive/Desktop/erp/Lib/site-packages",
+    "C:/Users/kabin/OneDrive/Desktop/erp/backend"
+  ],
+  "exclude": [
+    "**/*_pyrefly_virtual_*/**"
+  ],
+  "ignore": [
+    "**/*_pyrefly_virtual_*/**"
+  ]
+}

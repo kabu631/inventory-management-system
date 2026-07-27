@@ -1,0 +1,17 @@
+{
+  "name": "battery-erp",
+  "version": "1.0.0",
+  "description": "Lithium-ion Battery Trading ERP — Nepal",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "package-win": "electron-packager . \"Battery ERP\" --platform=win32 --arch=x64 --out=../dist --overwrite"
+  },
+  "devDependencies": {
+    "@electron/packager": "^18.4.1",
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3",
+    "electron-is-dev": "^3.0.1"
+  }
+}
