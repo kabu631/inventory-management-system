@@ -51,5 +51,11 @@ out/
 
 # Misc
 *.pem
+*.exe
+*.pdf
 npm-debug.log*
 yarn-debug.log*
+
+# AI agent config files
+AGENTS.md
+CLAUDE.md
