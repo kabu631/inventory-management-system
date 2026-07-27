@@ -1,369 +1,399 @@
-<![CDATA[# ⚡ Battery ERP — Inventory Management System
+<div align="center">
 
-> **Renew Gen Resources Nepal Pvt. Ltd.**
-> A full-stack Enterprise Resource Planning (ERP) system purpose-built for lithium-ion battery trading, inventory management, and financial accounting — tailored for the Nepali market (NPR currency).
+# ⚡ Battery ERP — Inventory Management System
 
----
+### Renew Gen Resources Nepal Pvt. Ltd.
 
-## 📋 Table of Contents
+A full-stack ERP system for lithium-ion battery trading, inventory management, and financial accounting.
 
-- [Overview](#overview)
-- [Features](#features)
-- [Tech Stack](#tech-stack)
-- [Architecture](#architecture)
-- [Project Structure](#project-structure)
-- [Getting Started](#getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Backend Setup](#backend-setup)
-  - [Frontend Setup](#frontend-setup)
-  - [Desktop App (Electron)](#desktop-app-electron)
-- [API Endpoints](#api-endpoints)
-- [Database Schema](#database-schema)
-- [Backup & Recovery](#backup--recovery)
-- [Screenshots](#screenshots)
-- [License](#license)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Electron](https://img.shields.io/badge/Electron-31-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-3-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![Python](https://img.shields.io/badge/Python-3.10+-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+[![TailwindCSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat-square)](#)
+[![Platform](https://img.shields.io/badge/Platform-Windows-0078D6?style=flat-square&logo=windows&logoColor=white)](#)
+[![Currency](https://img.shields.io/badge/Currency-NPR_🇳🇵-blue?style=flat-square)](#)
 
 ---
 
-## Overview
+</div>
 
-Battery ERP is a comprehensive inventory and supply chain management system designed for battery distributors and traders in Nepal. It covers the complete business workflow — from purchasing batteries from suppliers, tracking serial numbers and warranties, managing multi-warehouse stock, selling to customers (B2B & B2C), to maintaining full double-entry accounting journals with tax-ready CSV exports for IRD (Inland Revenue Department) compliance.
+## 🎯 About
 
-The system runs as a **desktop application** (Electron) with an embedded backend, or can be deployed as a standalone **web application** with separate frontend and backend services.
+**Battery ERP** is a comprehensive enterprise resource planning system designed specifically for battery distributors and traders in Nepal. It covers the **entire business workflow** — from purchasing batteries from suppliers, tracking serial numbers and warranties, managing multi-warehouse stock, selling to customers, to maintaining full **double-entry accounting** with tax-ready exports for **IRD compliance**.
+
+> 💡 Runs as a **desktop application** (Electron) with an embedded backend, or as a standalone **web application** with separate frontend and backend services.
 
 ---
 
-## Features
+## ✨ Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
 
 ### 📊 Dashboard & Analytics
-- **KPI Cards** — Total Revenue, Gross Profit, Inventory Value, Active Loans
-- **Revenue Trend Charts** — Monthly sales performance visualization
-- **Recent Transactions Feed** — Latest double-entry journal postings
-- **ML-Powered Forecasting** — Linear regression revenue predictions for the next 3 months
-- **Financial Privacy Lock** — PIN-protected toggle to blur/reveal sensitive financial data
+- Real-time KPI cards (Revenue, Profit, Inventory Value, Loans)
+- Monthly revenue trend charts
+- ML-powered revenue forecasting (scikit-learn)
+- PIN-protected financial privacy lock
 
-### 📦 Inventory & Stock Management
-- Full SKU-based battery inventory (brand, capacity Ah, voltage V)
-- Import cost and selling price tracking (NPR)
-- Real-time stock quantity with reorder level alerts
-- Bulk stock operations (purchase, sell, adjust)
+### 📦 Inventory Management
+- SKU-based battery catalog (brand, capacity, voltage)
+- Import cost & selling price tracking (NPR)
+- Real-time stock with reorder level alerts
+- Bulk stock operations
 
-### 🏭 Multi-Warehouse Management
-- Create and manage multiple warehouse/depot locations
-- **Inter-warehouse stock transfers** with full audit trail
+### 🏭 Multi-Warehouse
+- Multiple warehouse/depot locations
+- Inter-warehouse stock transfers
 - Per-warehouse stock visibility
-- Primary warehouse designation
+- Full transfer audit trail
 
-### 🔋 Serial Number & Warranty Tracking
-- Individual battery serial number registration
-- Warranty period tracking per serial (configurable months)
-- Warranty expiry date auto-calculation
-- **Warranty Claims** — Register, track, and resolve (PENDING → REPLACED / REJECTED)
-- Serial lifecycle: `IN_STOCK` → `SOLD` → `WARRANTY_CLAIM` → `SCRAPPED`
+### 🔋 Serial & Warranty Tracking
+- Individual battery serial registration
+- Auto warranty expiry calculation
+- Warranty claim lifecycle management
+- Serial status tracking (IN_STOCK → SOLD → CLAIM → SCRAPPED)
 
-### 🚛 Supplier & Purchase Order Management
-- Supplier/vendor directory with contact details and PAN/VAT numbers
-- Purchase Order (PO) creation with multi-line items
-- PO lifecycle: `DRAFT` → `SENT` → `RECEIVED` → `CANCELLED`
-- Payment method tracking (Bank, Cash, Credit)
+</td>
+<td width="50%" valign="top">
 
-### 👥 Customer Management
-- Customer database with B2B and B2C classification
-- Credit limit management
-- Customer-linked journal entries and transaction history
+### 🚛 Suppliers & Purchase Orders
+- Supplier directory with PAN/VAT numbers
+- Multi-line purchase order creation
+- PO lifecycle (DRAFT → SENT → RECEIVED → CANCELLED)
+- Payment method tracking
 
-### 📒 Double-Entry Accounting (Journal)
-- Full **Chart of Accounts** (Asset, Liability, Equity, Income, Expense)
-- Double-entry journal entries with debit/credit balancing
-- Transaction narration and reference tracking
-- **Tax CSV Export** — IRD-compliant journal export for tax audits
+### 📒 Double-Entry Accounting
+- Full Chart of Accounts (5 account types)
+- Journal entries with debit/credit balancing
+- Transaction narration & references
+- **Tax CSV export** for IRD audit compliance
 
 ### 🏦 Bank Loan Management
-- Track multiple bank loans with principal and interest rates
-- Loan repayment scheduling and recording
-- Interest calculation (simple interest)
-- Auto-linking repayments to journal entries
-- Loan lifecycle management (active → closed)
+- Multi-loan tracking with interest rates
+- Repayment scheduling & recording
+- Auto-linked journal entries
+- Loan lifecycle (active → closed)
 
-### 💾 Backup & Recovery
-- **Auto-backup every 30 minutes** to local storage and Google Drive
-- **On-write backup** — database backed up on every write operation
-- Single-file overwrite strategy (`erp_latest.db`)
-- One-click database restore from any backup
-- Google Drive sync (`G:\My Drive\BatteryERP_Backups\`)
+### 💾 Auto Backup & Recovery
+- **30-minute auto-backup** (background task)
+- On-write backup on every DB mutation
+- Google Drive sync (G:\My Drive)
+- One-click database restore
 
-### 🎨 UI/UX
-- Modern dark/light theme with smooth transitions
-- Glassmorphism sidebar with company branding
-- Responsive grid layouts
-- Micro-animations and hover effects
-- Lucide React icon system
+</td>
+</tr>
+</table>
 
 ---
 
-## Tech Stack
-
-| Layer        | Technology                                                     |
-| ------------ | -------------------------------------------------------------- |
-| **Frontend** | Next.js 16, React 19, TypeScript, Tailwind CSS 4, Recharts    |
-| **Backend**  | FastAPI 0.111, Python 3.x, SQLAlchemy 2.0, Uvicorn            |
-| **Database** | SQLite 3 (WAL mode, single-file)                              |
-| **Desktop**  | Electron 31 (with embedded backend .exe via PyInstaller)       |
-| **ML/AI**    | scikit-learn (Linear Regression), pandas (data processing)     |
-| **Icons**    | Lucide React                                                   |
-
----
-
-## Architecture
+## 🏗️ Architecture
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                    Electron Shell                         │
-│  ┌────────────────────┐    ┌──────────────────────────┐  │
-│  │   Next.js Frontend │◄──►│   FastAPI Backend (.exe) │  │
-│  │   (React 19 + TS)  │    │   SQLAlchemy + SQLite    │  │
-│  │   Port: 3000       │    │   Port: 8000             │  │
-│  └────────────────────┘    └──────────┬───────────────┘  │
-│                                       │                   │
-│                              ┌────────▼────────┐         │
-│                              │   erp.db         │         │
-│                              │   (SQLite WAL)   │         │
-│                              └────────┬────────┘         │
-│                                       │                   │
-│                     ┌─────────────────┼──────────────┐   │
-│                     ▼                                ▼   │
-│              Local Backups              Google Drive      │
-│           backups/erp_latest.db    G:\My Drive\...\.db   │
-└──────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│                      Electron Shell                          │
+│                                                              │
+│   ┌─────────────────────┐      ┌──────────────────────────┐ │
+│   │  Next.js Frontend   │◄────►│  FastAPI Backend (.exe)   │ │
+│   │  React 19 + TS      │      │  SQLAlchemy + SQLite      │ │
+│   │  Port 3000          │      │  Port 8000                │ │
+│   └─────────────────────┘      └────────────┬─────────────┘ │
+│                                              │               │
+│                                    ┌─────────▼──────────┐   │
+│                                    │     erp.db          │   │
+│                                    │   (SQLite + WAL)    │   │
+│                                    └─────────┬──────────┘   │
+│                                              │               │
+│                              ┌───────────────┼───────────┐  │
+│                              ▼                           ▼  │
+│                       Local Backups            Google Drive  │
+│                    erp_latest.db         G:\My Drive\...     │
+└──────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
-erp/
-├── backend/                     # FastAPI backend
+📦 inventory-management-system
+├── 🐍 backend/                     # FastAPI REST API
 │   ├── app/
-│   │   ├── main.py              # FastAPI app, lifespan, CORS, router registration
-│   │   ├── database.py          # SQLAlchemy engine, session, SQLite config
-│   │   ├── models.py            # All ORM models (13 tables)
-│   │   ├── seed.py              # Initial data seeding
-│   │   ├── clear_db.py          # Database reset utility
-│   │   ├── routers/
-│   │   │   ├── inventory.py     # Inventory CRUD + stock operations
-│   │   │   ├── customers.py     # Customer management
-│   │   │   ├── suppliers.py     # Suppliers & Purchase Orders
-│   │   │   ├── warehouses.py    # Warehouse & stock transfers
-│   │   │   ├── serials.py       # Battery serial & warranty tracking
-│   │   │   ├── journal.py       # Double-entry journal & tax export
-│   │   │   ├── loans.py         # Bank loan management
-│   │   │   ├── analytics.py     # KPIs, monthly trends, ML forecast
-│   │   │   └── backup.py        # Backup & restore endpoints
+│   │   ├── main.py                 # App entry, CORS, lifespan
+│   │   ├── database.py             # SQLAlchemy engine & session
+│   │   ├── models.py               # 13 ORM models
+│   │   ├── seed.py                 # Sample data seeder
+│   │   ├── routers/                # API route handlers
+│   │   │   ├── inventory.py        #   └─ Inventory CRUD
+│   │   │   ├── customers.py        #   └─ Customer mgmt
+│   │   │   ├── suppliers.py        #   └─ Suppliers & POs
+│   │   │   ├── warehouses.py       #   └─ Warehouses & transfers
+│   │   │   ├── serials.py          #   └─ Serials & warranty
+│   │   │   ├── journal.py          #   └─ Accounting journal
+│   │   │   ├── loans.py            #   └─ Bank loans
+│   │   │   ├── analytics.py        #   └─ KPIs & ML forecast
+│   │   │   └── backup.py           #   └─ Backup & restore
 │   │   └── services/
-│   │       └── backup.py        # Backup engine (local + Google Drive)
-│   ├── requirements.txt         # Python dependencies
-│   ├── run.py                   # Uvicorn startup script
-│   └── build_backend.py         # PyInstaller build script for .exe
+│   │       └── backup.py           # Backup engine
+│   ├── requirements.txt
+│   └── run.py
 │
-├── frontend/                    # Next.js frontend
+├── ⚛️  frontend/                    # Next.js 16 + React 19
 │   ├── app/
-│   │   ├── layout.tsx           # Root layout with sidebar & theme
-│   │   ├── page.tsx             # Dashboard (KPIs, charts, quick actions)
-│   │   ├── globals.css          # Global styles & design tokens
-│   │   ├── inventory/page.tsx   # Inventory management page
-│   │   ├── warehouses/page.tsx  # Warehouse management page
-│   │   ├── suppliers/page.tsx   # Supplier & PO page
-│   │   ├── customers/page.tsx   # Customer management page
-│   │   ├── journal/page.tsx     # Journal & tax export page
-│   │   ├── loans/page.tsx       # Bank loan page
-│   │   ├── analytics/page.tsx   # Analytics & forecasting page
-│   │   ├── warranty/page.tsx    # Serial & warranty page
-│   │   ├── invoice/page.tsx     # Invoice generation page
-│   │   └── settings/page.tsx    # Data & backup settings
-│   ├── components/
-│   │   └── Sidebar.tsx          # Navigation sidebar
-│   ├── contexts/
-│   │   └── ThemeContext.tsx      # Dark/light theme context
+│   │   ├── layout.tsx              # Root layout + sidebar
+│   │   ├── page.tsx                # Dashboard
+│   │   ├── globals.css             # Design tokens & styles
+│   │   ├── inventory/page.tsx
+│   │   ├── warehouses/page.tsx
+│   │   ├── suppliers/page.tsx
+│   │   ├── customers/page.tsx
+│   │   ├── journal/page.tsx
+│   │   ├── loans/page.tsx
+│   │   ├── analytics/page.tsx
+│   │   ├── warranty/page.tsx
+│   │   ├── invoice/page.tsx
+│   │   └── settings/page.tsx
+│   ├── components/Sidebar.tsx
+│   └── contexts/ThemeContext.tsx
+│
+├── 🖥️  desktop-app/                # Electron wrapper
+│   ├── main.js
 │   └── package.json
 │
-├── desktop-app/                 # Electron desktop wrapper
-│   ├── main.js                  # Electron main process
-│   ├── package.json
-│   └── resources/
-│       └── backend.exe          # Bundled FastAPI backend
-│
-├── start-backend.bat            # Quick-start backend (Windows)
-├── start-frontend.bat           # Quick-start frontend (Windows)
-├── seed-database.bat            # Seed database with sample data
-├── clear-database.bat           # Reset database
-├── pyproject.toml               # Python project config
-└── .gitignore
+├── start-backend.bat               # Quick launchers (Windows)
+├── start-frontend.bat
+├── seed-database.bat
+└── clear-database.bat
 ```
 
 ---
 
-## Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 
-- **Python 3.10+** — [Download](https://www.python.org/downloads/)
-- **Node.js 18+** — [Download](https://nodejs.org/)
-- **Git** — [Download](https://git-scm.com/)
+| Requirement | Version |
+|---|---|
+| ![Python](https://img.shields.io/badge/-Python-3776AB?style=flat-square&logo=python&logoColor=white) | 3.10+ |
+| ![Node.js](https://img.shields.io/badge/-Node.js-339933?style=flat-square&logo=node.js&logoColor=white) | 18+ |
+| ![Git](https://img.shields.io/badge/-Git-F05032?style=flat-square&logo=git&logoColor=white) | Latest |
 
-### Backend Setup
+### 1️⃣ Clone the Repository
 
 ```bash
-# Clone the repository
 git clone https://github.com/kabu631/inventory-management-system.git
 cd inventory-management-system
+```
 
-# Create and activate a virtual environment
+### 2️⃣ Backend Setup
+
+```bash
+# Create virtual environment
 python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # macOS/Linux
+venv\Scripts\activate          # Windows
+# source venv/bin/activate     # macOS/Linux
 
-# Install Python dependencies
+# Install dependencies
 pip install -r backend/requirements.txt
 
-# Start the backend server
+# Start the API server
 cd backend
 python run.py
 ```
 
-The API server will start at **http://localhost:8000**. Visit **http://localhost:8000/docs** for the interactive Swagger documentation.
+> 🟢 API running at **http://localhost:8000** — Swagger docs at **http://localhost:8000/docs**
 
-### Frontend Setup
+### 3️⃣ Frontend Setup
 
 ```bash
-# Open a new terminal
 cd frontend
-
-# Install Node.js dependencies
-npm install
-
-# Start the development server
-npm run dev
-```
-
-The frontend will be available at **http://localhost:3000**.
-
-### Desktop App (Electron)
-
-```bash
-# Build the backend executable first (optional, for packaging)
-cd backend
-python build_backend.py
-
-# Run the Electron app in dev mode
-cd ../desktop-app
 npm install
 npm run dev
 ```
 
-> **Note:** In dev mode, the Electron app connects to the Next.js dev server (`localhost:3000`) and expects the backend to be running separately on `localhost:8000`.
+> 🟢 Frontend running at **http://localhost:3000**
 
-### Quick Start (Windows)
-
-Use the provided batch files for convenience:
+### 4️⃣ Desktop App (Optional)
 
 ```bash
-start-backend.bat      # Starts the FastAPI backend
-start-frontend.bat     # Starts the Next.js frontend
-seed-database.bat      # Seeds the database with sample data
-clear-database.bat     # Resets the database
+cd desktop-app
+npm install
+npm run dev           # Dev mode (connects to localhost)
+```
+
+### ⚡ Quick Start (Windows)
+
+```
+start-backend.bat      → Starts FastAPI server
+start-frontend.bat     → Starts Next.js dev server
+seed-database.bat      → Seeds sample data
+clear-database.bat     → Resets database
 ```
 
 ---
 
-## API Endpoints
+## 🔌 API Reference
 
-| Method   | Endpoint                     | Description                          |
-| -------- | ---------------------------- | ------------------------------------ |
-| `GET`    | `/api/health`                | Health check & service status        |
-| **Inventory** |                         |                                      |
-| `GET`    | `/api/inventory/`            | List all inventory items             |
-| `POST`   | `/api/inventory/`            | Create new inventory item            |
-| `PUT`    | `/api/inventory/{id}`        | Update inventory item                |
-| `DELETE` | `/api/inventory/{id}`        | Delete inventory item                |
-| **Customers** |                         |                                      |
-| `GET`    | `/api/customers/`            | List all customers                   |
-| `POST`   | `/api/customers/`            | Create new customer                  |
-| `PUT`    | `/api/customers/{id}`        | Update customer                      |
-| `DELETE` | `/api/customers/{id}`        | Delete customer                      |
-| **Suppliers** |                         |                                      |
-| `GET`    | `/api/suppliers/`            | List suppliers & purchase orders     |
-| `POST`   | `/api/suppliers/`            | Create supplier                      |
-| `POST`   | `/api/suppliers/po`          | Create purchase order                |
-| **Warehouses** |                        |                                      |
-| `GET`    | `/api/warehouses/`           | List all warehouses                  |
-| `POST`   | `/api/warehouses/`           | Create warehouse                     |
-| `POST`   | `/api/warehouses/transfer`   | Inter-warehouse stock transfer       |
-| **Serials & Warranty** |                |                                      |
-| `GET`    | `/api/serials/`              | List battery serials                 |
-| `POST`   | `/api/serials/`              | Register new serial                  |
-| `POST`   | `/api/serials/warranty-claim`| File warranty claim                  |
-| **Journal** |                           |                                      |
-| `GET`    | `/api/journal/`              | List journal entries                 |
-| `POST`   | `/api/journal/`              | Create journal entry                 |
-| `GET`    | `/api/journal/export/csv`    | Export journal as CSV (tax)          |
-| **Loans** |                             |                                      |
-| `GET`    | `/api/loans/`                | List bank loans                      |
-| `POST`   | `/api/loans/`                | Create bank loan                     |
-| `POST`   | `/api/loans/{id}/repay`      | Record loan repayment                |
-| **Analytics** |                         |                                      |
-| `GET`    | `/api/analytics/`            | KPIs & monthly breakdown            |
-| `GET`    | `/api/analytics/forecast`    | ML revenue forecast (3 months)       |
-| **Backup** |                            |                                      |
-| `GET`    | `/api/backup/`               | List available backups               |
-| `POST`   | `/api/backup/trigger`        | Trigger manual backup                |
-| `POST`   | `/api/backup/restore`        | Restore from backup file             |
+<details>
+<summary><strong>📦 Inventory</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/inventory/` | List all items |
+| `POST` | `/api/inventory/` | Create item |
+| `PUT` | `/api/inventory/{id}` | Update item |
+| `DELETE` | `/api/inventory/{id}` | Delete item |
+
+</details>
+
+<details>
+<summary><strong>👥 Customers</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/customers/` | List customers |
+| `POST` | `/api/customers/` | Create customer |
+| `PUT` | `/api/customers/{id}` | Update customer |
+| `DELETE` | `/api/customers/{id}` | Delete customer |
+
+</details>
+
+<details>
+<summary><strong>🚛 Suppliers & PO</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/suppliers/` | List suppliers & POs |
+| `POST` | `/api/suppliers/` | Create supplier |
+| `POST` | `/api/suppliers/po` | Create purchase order |
+
+</details>
+
+<details>
+<summary><strong>🏭 Warehouses</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/warehouses/` | List warehouses |
+| `POST` | `/api/warehouses/` | Create warehouse |
+| `POST` | `/api/warehouses/transfer` | Stock transfer |
+
+</details>
+
+<details>
+<summary><strong>🔋 Serials & Warranty</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/serials/` | List serials |
+| `POST` | `/api/serials/` | Register serial |
+| `POST` | `/api/serials/warranty-claim` | File warranty claim |
+
+</details>
+
+<details>
+<summary><strong>📒 Journal</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/journal/` | List entries |
+| `POST` | `/api/journal/` | Create entry |
+| `GET` | `/api/journal/export/csv` | Export CSV (tax) |
+
+</details>
+
+<details>
+<summary><strong>🏦 Loans</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/loans/` | List loans |
+| `POST` | `/api/loans/` | Create loan |
+| `POST` | `/api/loans/{id}/repay` | Record repayment |
+
+</details>
+
+<details>
+<summary><strong>📊 Analytics</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/analytics/` | KPIs & monthly data |
+| `GET` | `/api/analytics/forecast` | ML revenue forecast |
+
+</details>
+
+<details>
+<summary><strong>💾 Backup</strong></summary>
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/api/backup/` | List backups |
+| `POST` | `/api/backup/trigger` | Manual backup |
+| `POST` | `/api/backup/restore` | Restore backup |
+
+</details>
 
 ---
 
-## Database Schema
+## 🗄️ Database
 
-The system uses **SQLite 3** with **WAL (Write-Ahead Logging)** mode for optimal performance. The database contains **13 tables**:
+**SQLite 3** with **WAL mode** — 14 tables:
 
-| Table                  | Description                                    |
-| ---------------------- | ---------------------------------------------- |
-| `warehouses`           | Warehouse/depot locations                      |
-| `suppliers`            | Supplier/vendor directory                      |
-| `customers`            | Customer database (B2B/B2C)                    |
-| `inventory`            | Battery SKU catalog with pricing               |
-| `battery_serials`      | Individual serial number tracking              |
-| `warranty_claims`      | Warranty claim records                         |
-| `stock_transfers`      | Inter-warehouse transfer log                   |
-| `purchase_orders`      | Purchase order headers                         |
-| `purchase_order_items` | Purchase order line items                      |
-| `account_heads`        | Chart of accounts (5 types)                    |
-| `journal_entries`      | Double-entry journal headers                   |
-| `journal_lines`        | Journal debit/credit lines                     |
-| `bank_loans`           | Bank loan records                              |
-| `loan_repayments`      | Loan repayment transactions                    |
-
----
-
-## Backup & Recovery
-
-The system implements a **multi-destination backup strategy**:
-
-1. **Automatic Backups** — Every 30 minutes via background task
-2. **On-Write Backups** — Triggered on every database write operation
-3. **Manual Backups** — Via the Settings page or API endpoint
-4. **Google Drive Sync** — Auto-syncs to `G:\My Drive\BatteryERP_Backups\` (if Google Drive desktop is installed)
-
-**Restore:** Navigate to **Settings → Data & Backup** or call `POST /api/backup/restore` with the backup file path.
+| Table | Purpose |
+|---|---|
+| `warehouses` | Warehouse locations |
+| `suppliers` | Vendor directory |
+| `customers` | Customer database (B2B/B2C) |
+| `inventory` | Battery SKU catalog |
+| `battery_serials` | Serial number tracking |
+| `warranty_claims` | Warranty claim records |
+| `stock_transfers` | Inter-warehouse transfers |
+| `purchase_orders` | PO headers |
+| `purchase_order_items` | PO line items |
+| `account_heads` | Chart of accounts |
+| `journal_entries` | Journal headers |
+| `journal_lines` | Debit/credit lines |
+| `bank_loans` | Loan records |
+| `loan_repayments` | Repayment transactions |
 
 ---
 
-## License
+## 🛡️ Backup Strategy
 
-This project is proprietary software developed for **Renew Gen Resources Nepal Pvt. Ltd.**
+| Type | Frequency | Destination |
+|---|---|---|
+| ⏰ Scheduled | Every 30 minutes | Local + Google Drive |
+| ✍️ On-write | Every DB mutation | Local + Google Drive |
+| 🖱️ Manual | On demand | Local + Google Drive |
+
+> Backup location: `G:\My Drive\BatteryERP_Backups\erp_latest.db`
 
 ---
 
-<p align="center">
-  Built with ❤️ for the Nepali battery trading industry
-</p>
-]]>
+<div align="center">
+
+## 🛠️ Built With
+
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![Next.js](https://img.shields.io/badge/Next.js-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
+[![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+[![Electron](https://img.shields.io/badge/Electron-47848F?style=for-the-badge&logo=electron&logoColor=white)](https://www.electronjs.org/)
+[![SQLite](https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white)](https://www.sqlite.org/)
+[![scikit--learn](https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikit-learn&logoColor=white)](https://scikit-learn.org/)
+[![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white)](https://tailwindcss.com/)
+
+---
+
+**Renew Gen Resources Nepal Pvt. Ltd.** © 2025
+
+Built with ❤️ for the Nepali battery trading industry
+
+</div>
