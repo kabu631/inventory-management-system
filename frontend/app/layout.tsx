@@ -3,12 +3,14 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { AuthProvider } from "@/contexts/AuthContext";
+import AppLayout from "@/components/AppLayout";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Renew Gen Resources Nepal Pvt. Ltd.",
-  description: "Renew Gen Resources Nepal Pvt. Ltd. ERP System",
+  title: "ONIN Infosys — Corporate ERP & Inventory System",
+  description: "ONIN Infosys Pvt. Ltd. ERP System — Laptops, PC Components & Accessories Management",
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
@@ -28,22 +30,9 @@ export default function RootLayout({
         style={{ background: "var(--bg-root)", color: "var(--text-primary)", minHeight: "100vh" }}
       >
         <ThemeProvider>
-          <div style={{ display: "flex", minHeight: "100vh" }}>
-            <Sidebar />
-            <main
-              style={{
-                flex: 1,
-                marginLeft: "16rem",
-                padding: "2rem",
-                overflow: "auto",
-                background: "var(--bg-root)",
-                minHeight: "100vh",
-                transition: "background 0.25s ease",
-              }}
-            >
-              {children}
-            </main>
-          </div>
+          <AuthProvider>
+            <AppLayout>{children}</AppLayout>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

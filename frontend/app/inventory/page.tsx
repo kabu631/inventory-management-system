@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api, formatNPR } from "@/lib/api";
 import { AlertTriangle, Plus, Search, TrendingUp, Package, ShoppingBag, ArrowDownLeft, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface Item {
   id: number; sku: string; name: string; brand: string;
@@ -16,6 +17,9 @@ interface Customer {
 }
 
 export default function InventoryPage() {
+  const { user } = useAuth();
+  const isStaff = user?.role === "STAFF";
+
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
@@ -105,7 +109,7 @@ export default function InventoryPage() {
       });
       setShowForm(false);
       setForm({ sku:"",name:"",brand:"",capacity_ah:"",voltage_v:"",import_cost_npr:"",selling_price_npr:"",stock_qty:"",reorder_level:"5" });
-      flashMsg("New battery SKU added successfully!", "success");
+      flashMsg("New product SKU added successfully!", "success");
       load();
     } catch(e: unknown) { setError(e instanceof Error ? e.message : "Failed to add item"); }
     finally { setSubmitting(false); }
@@ -158,7 +162,7 @@ export default function InventoryPage() {
   };
 
   const handlePostSale = async () => {
-    if (!saleForm.inventory_id) return alert("Please select a battery SKU.");
+    if (!saleForm.inventory_id) return alert("Please select a product SKU.");
     if (saleForm.quantity <= 0) return alert("Quantity must be greater than 0.");
 
     setSaleSubmitting(true);
@@ -214,7 +218,7 @@ export default function InventoryPage() {
   };
 
   const handlePostPurchase = async () => {
-    if (!purchaseForm.inventory_id) return alert("Please select a battery SKU.");
+    if (!purchaseForm.inventory_id) return alert("Please select a product SKU.");
     if (purchaseForm.quantity <= 0) return alert("Quantity must be greater than 0.");
 
     setPurchaseSubmitting(true);
@@ -260,13 +264,14 @@ export default function InventoryPage() {
       ? (((item.selling_price_npr - item.import_cost_npr) / item.selling_price_npr) * 100).toFixed(1)
       : "0.0";
 
-  const FIELDS: [string, string, string, string][] = [
-    ["sku","SKU *","LFP-12-100","text"], ["name","Name *","LFP 12V 100Ah Battery","text"],
-    ["brand","Brand","PowerNep","text"], ["capacity_ah","Capacity (Ah)","100","number"],
-    ["voltage_v","Voltage (V)","12","number"], ["import_cost_npr","Import Cost NPR","18000","number"],
-    ["selling_price_npr","Selling Price NPR","24000","number"], ["stock_qty","Stock Qty","0","number"],
+  const ALL_FIELDS: [string, string, string, string][] = [
+    ["sku","SKU *","MAC-M3P-14","text"], ["name","Name *","MacBook Pro 14 M3 Pro","text"],
+    ["brand","Brand","Apple","text"], ["capacity_ah","RAM/Spec","18","number"],
+    ["voltage_v","Display Size","14","number"], ["import_cost_npr","Import Cost NPR","265000","number"],
+    ["selling_price_npr","Selling Price NPR","295000","number"], ["stock_qty","Stock Qty","0","number"],
     ["reorder_level","Reorder Level","5","number"],
   ];
+  const FIELDS = isStaff ? ALL_FIELDS.filter(([k]) => k !== "import_cost_npr") : ALL_FIELDS;
 
   return (
     <div>
@@ -274,7 +279,7 @@ export default function InventoryPage() {
         <div>
           <h1 className="page-title">Inventory & Stock Management</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem" }}>
-            Purchase Inventory using Bank Loan Funds & Sell Battery Stock
+            Manage Laptops, PC Components & Accessories Stock
           </p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>
@@ -282,7 +287,7 @@ export default function InventoryPage() {
             <ArrowDownLeft size={16} /> Purchase Stock (Bank Loan Funds)
           </button>
           <button className="btn btn-ghost" onClick={() => handleOpenSaleModal()} id="new-sale-btn" style={{ borderColor: "rgba(99,102,241,0.4)", color: "#818cf8" }}>
-            <ShoppingBag size={16} /> Sell Battery / Invoice
+            <ShoppingBag size={16} /> Sell Product / Invoice
           </button>
           <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-sku-btn">
             <Plus size={16} /> Add SKU
@@ -300,7 +305,9 @@ export default function InventoryPage() {
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
-          { label: "Total Inventory Value", value: formatNPR(totalValue),                        color: "#6366f1", icon: Package },
+          isStaff
+            ? { label: "Total Catalog Items", value: `${items.length} SKUs`, color: "#6366f1", icon: Package }
+            : { label: "Total Inventory Value", value: formatNPR(totalValue), color: "#6366f1", icon: Package },
           { label: "Total Units in Stock",  value: `${totalUnits.toLocaleString()} units`,        color: "#22c55e", icon: TrendingUp },
           { label: "Low Stock Items",       value: `${lowStockCount} SKUs`,                       color: lowStockCount > 0 ? "#ef4444" : "#22c55e", icon: AlertTriangle },
         ].map(k => (
@@ -319,7 +326,7 @@ export default function InventoryPage() {
       {/* Add SKU Form */}
       {showForm && (
         <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
-          <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1rem" }}>Add Battery SKU</h2>
+          <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1rem" }}>Add Product SKU</h2>
           {error && <div className="alert alert-error" style={{ marginBottom: "0.75rem" }}>{error}</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
             {FIELDS.map(([key, label, placeholder, type]) => (
@@ -360,7 +367,7 @@ export default function InventoryPage() {
               {/* Product selection */}
               <div>
                 <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
-                  Select Battery Product to Buy *
+                  Select Product to Buy *
                 </label>
                 <select
                   className="input"
@@ -473,7 +480,7 @@ export default function InventoryPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <ShoppingBag size={20} color="#818cf8" />
                 <h2 style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "1.1rem" }}>
-                  Sell Battery / Product Invoice
+                  Sell Product / Invoice
                 </h2>
               </div>
               <button onClick={() => setShowSaleModal(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={18} /></button>
@@ -544,7 +551,7 @@ export default function InventoryPage() {
                     <div>
                       <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "0.2rem" }}>Customer / Business Name *</label>
                       <input
-                        type="text" className="input" placeholder="e.g. Kathmandu Solar House or Ram Thapa"
+                        type="text" className="input" placeholder="e.g. WorldLink Communications or Ram Thapa"
                         value={newCustomer.name}
                         onChange={e => setNewCustomer(c => ({ ...c, name: e.target.value }))}
                         id="new-cust-name-input"
@@ -597,7 +604,7 @@ export default function InventoryPage() {
 
               <div>
                 <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
-                  Select Battery Product *
+                  Select Product *
                 </label>
                 <select
                   className="input"
@@ -754,11 +761,11 @@ export default function InventoryPage() {
             <thead>
               <tr>
                 <th>SKU</th><th>Name</th><th>Brand</th><th>Spec</th>
-                <th style={{ textAlign: "right" }}>Import Cost</th>
+                {!isStaff && <th style={{ textAlign: "right" }}>Import Cost</th>}
                 <th style={{ textAlign: "right" }}>Sell Price</th>
-                <th style={{ textAlign: "right" }}>Margin</th>
+                {!isStaff && <th style={{ textAlign: "right" }}>Margin</th>}
                 <th style={{ textAlign: "center" }}>Stock</th>
-                <th style={{ textAlign: "right" }}>Value</th>
+                {!isStaff && <th style={{ textAlign: "right" }}>Value</th>}
                 <th>Status</th>
                 <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
@@ -770,13 +777,13 @@ export default function InventoryPage() {
                   <td style={{ fontWeight: 500 }}>{item.name}</td>
                   <td className="text-muted">{item.brand}</td>
                   <td className="text-faint" style={{ fontSize: "0.8rem" }}>{item.voltage_v}V / {item.capacity_ah}Ah</td>
-                  <td style={{ textAlign: "right" }} className="text-muted">{formatNPR(item.import_cost_npr)}</td>
+                  {!isStaff && <td style={{ textAlign: "right" }} className="text-muted">{formatNPR(item.import_cost_npr)}</td>}
                   <td style={{ textAlign: "right" }}>{formatNPR(item.selling_price_npr)}</td>
-                  <td style={{ textAlign: "right", color: "#22c55e", fontWeight: 600 }}>{margin(item)}%</td>
+                  {!isStaff && <td style={{ textAlign: "right", color: "#22c55e", fontWeight: 600 }}>{margin(item)}%</td>}
                   <td style={{ textAlign: "center", fontWeight: 700, color: item.low_stock ? "#ef4444" : "var(--text-primary)" }}>
                     {item.stock_qty}
                   </td>
-                  <td style={{ textAlign: "right", color: "#818cf8", fontWeight: 600 }}>{formatNPR(item.inventory_value_npr)}</td>
+                  {!isStaff && <td style={{ textAlign: "right", color: "#818cf8", fontWeight: 600 }}>{formatNPR(item.inventory_value_npr)}</td>}
                   <td>
                     {item.low_stock
                       ? <span className="badge badge-red"><AlertTriangle size={10} style={{ marginRight: 3 }} />Low</span>

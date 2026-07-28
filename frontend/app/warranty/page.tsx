@@ -61,7 +61,7 @@ export default function WarrantyPage() {
   const flash = (text: string, type: string) => { setMsg({ text, type }); setTimeout(() => setMsg({ text: "", type: "" }), 4000); };
 
   const handleRegisterSerials = async () => {
-    if (!regForm.inventory_id) return alert("Select battery SKU");
+    if (!regForm.inventory_id) return alert("Select product SKU");
     const sns = regForm.serial_numbers_raw.split("\n").map(s => s.trim()).filter(Boolean);
     if (sns.length === 0) return alert("Enter at least one serial number");
 
@@ -98,15 +98,15 @@ export default function WarrantyPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Battery Serial & Warranty Management</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Individual Battery Unit Tracking, Warranty Expiry & Defective Claim Processing</p>
+          <h1 className="page-title">Device &amp; Component Serial Tracking</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Individual Unit Tracking, Warranty Expiry &amp; Claim Processing</p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>
           <button className="btn btn-ghost" onClick={() => setShowClaimModal(true)} style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}>
             <ShieldAlert size={16} /> Submit Warranty Claim
           </button>
           <button className="btn btn-primary" onClick={() => setShowRegModal(true)}>
-            <Barcode size={16} /> Register Battery Serials
+            <Barcode size={16} /> Register Device Serials
           </button>
         </div>
       </div>
@@ -121,10 +121,10 @@ export default function WarrantyPage() {
       {showRegModal && (
         <div className="modal-overlay">
           <div className="card" style={{ padding: "2rem", width: "500px", maxWidth: "90vw" }}>
-            <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1.25rem" }}>Register Battery Serial Numbers</h2>
+            <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1.25rem" }}>Register Device Serial Numbers</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
               <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Battery SKU *</label>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Product SKU *</label>
                 <select className="input" value={regForm.inventory_id} onChange={e => setRegForm(f => ({ ...f, inventory_id: Number(e.target.value) }))}>
                   {items.map(i => <option key={i.id} value={i.id}>{i.sku} — {i.name}</option>)}
                 </select>
@@ -132,7 +132,7 @@ export default function WarrantyPage() {
 
               <div>
                 <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Serial Numbers (One per line) *</label>
-                <textarea className="input" rows={4} placeholder="SN-LFP-2026-001&#10;SN-LFP-2026-002&#10;SN-LFP-2026-003" value={regForm.serial_numbers_raw} onChange={e => setRegForm(f => ({ ...f, serial_numbers_raw: e.target.value }))} />
+                <textarea className="input" rows={4} placeholder="SN-MAC-2026-001&#10;SN-MAC-2026-002&#10;SN-MAC-2026-003" value={regForm.serial_numbers_raw} onChange={e => setRegForm(f => ({ ...f, serial_numbers_raw: e.target.value }))} />
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
@@ -159,19 +159,19 @@ export default function WarrantyPage() {
       {showClaimModal && (
         <div className="modal-overlay">
           <div className="card" style={{ padding: "2rem", width: "500px", maxWidth: "90vw" }}>
-            <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1.25rem" }}>Process Battery Warranty Claim</h2>
+            <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1.25rem" }}>Process Product Warranty Claim</h2>
             <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
               <div>
                 <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Defective Serial Number *</label>
-                <input type="text" className="input" placeholder="SN-LFP-2026-001" value={claimForm.serial_number} onChange={e => setClaimForm(f => ({ ...f, serial_number: e.target.value }))} />
+                <input type="text" className="input" placeholder="SN-MAC-2026-001" value={claimForm.serial_number} onChange={e => setClaimForm(f => ({ ...f, serial_number: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Issue / Failure Description *</label>
-                <input type="text" className="input" placeholder="BMS Cell Imbalance / Low Discharge Voltage" value={claimForm.issue_description} onChange={e => setClaimForm(f => ({ ...f, issue_description: e.target.value }))} />
+                <input type="text" className="input" placeholder="Display backlight flickering / Motherboard No Power" value={claimForm.issue_description} onChange={e => setClaimForm(f => ({ ...f, issue_description: e.target.value }))} />
               </div>
               <div>
                 <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Replacement Serial Number (Optional)</label>
-                <input type="text" className="input" placeholder="SN-LFP-2026-099 (Leave blank if pending)" value={claimForm.replacement_serial_number} onChange={e => setClaimForm(f => ({ ...f, replacement_serial_number: e.target.value }))} />
+                <input type="text" className="input" placeholder="SN-MAC-2026-099 (Leave blank if pending)" value={claimForm.replacement_serial_number} onChange={e => setClaimForm(f => ({ ...f, replacement_serial_number: e.target.value }))} />
               </div>
             </div>
 
@@ -184,7 +184,7 @@ export default function WarrantyPage() {
       )}
 
       {/* Serials Table */}
-      <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.875rem" }}>Battery Serials Master Directory</h2>
+      <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.875rem" }}>Device &amp; Component Serials Master Directory</h2>
       <div className="card" style={{ overflow: "hidden", marginBottom: "2rem" }}>
         {loading ? (
           <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}><div className="spinner" /></div>
@@ -192,7 +192,7 @@ export default function WarrantyPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Serial Number</th><th>Battery SKU</th><th>Location</th><th>Purchase Date</th><th>Warranty Expiry</th><th>Customer</th><th>Status</th>
+                <th>Serial Number</th><th>Product SKU</th><th>Location</th><th>Purchase Date</th><th>Warranty Expiry</th><th>Customer</th><th>Status</th>
               </tr>
             </thead>
             <tbody>

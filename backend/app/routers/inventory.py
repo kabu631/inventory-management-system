@@ -32,9 +32,17 @@ class InventoryUpdate(BaseModel):
     reorder_level: Optional[int] = None
 
 
+from app.services.auth import get_current_user_optional
+from app.models import User
+
 @router.get("/")
-def list_inventory(db: Session = Depends(get_db)):
+def list_inventory(
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     items = db.query(Inventory).order_by(Inventory.sku).all()
+    is_staff = current_user is not None and current_user.role == "STAFF"
+
     return [
         {
             "id": i.id,
@@ -43,11 +51,11 @@ def list_inventory(db: Session = Depends(get_db)):
             "brand": i.brand,
             "capacity_ah": i.capacity_ah,
             "voltage_v": i.voltage_v,
-            "import_cost_npr": i.import_cost_npr,
+            "import_cost_npr": 0.0 if is_staff else i.import_cost_npr,
             "selling_price_npr": i.selling_price_npr,
             "stock_qty": i.stock_qty,
             "reorder_level": i.reorder_level,
-            "inventory_value_npr": round(i.import_cost_npr * i.stock_qty, 2),
+            "inventory_value_npr": 0.0 if is_staff else round(i.import_cost_npr * i.stock_qty, 2),
             "low_stock": i.stock_qty <= i.reorder_level,
         }
         for i in items
@@ -55,11 +63,29 @@ def list_inventory(db: Session = Depends(get_db)):
 
 
 @router.get("/{item_id}")
-def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
+def get_inventory_item(
+    item_id: int,
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
     item = db.query(Inventory).filter(Inventory.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
-    return item
+
+    is_staff = current_user is not None and current_user.role == "STAFF"
+    return {
+        "id": item.id,
+        "sku": item.sku,
+        "name": item.name,
+        "brand": item.brand,
+        "capacity_ah": item.capacity_ah,
+        "voltage_v": item.voltage_v,
+        "import_cost_npr": 0.0 if is_staff else item.import_cost_npr,
+        "selling_price_npr": item.selling_price_npr,
+        "stock_qty": item.stock_qty,
+        "reorder_level": item.reorder_level,
+        "low_stock": item.stock_qty <= item.reorder_level,
+    }
 
 
 @router.post("/", status_code=201)
@@ -106,6 +132,15 @@ class SalesInvoiceCreate(BaseModel):
     items: List[SaleItemIn]
     apply_vat: Optional[bool] = False
     vat_rate: Optional[float] = 13.0
+
+
+def _get_or_create_account(db: Session, code: str, name: str, account_type: str, normal_balance: str) -> AccountHead:
+    acc = db.query(AccountHead).filter(AccountHead.code == code).first()
+    if not acc:
+        acc = AccountHead(code=code, name=name, account_type=account_type, normal_balance=normal_balance)
+        db.add(acc)
+        db.flush()
+    return acc
 
 
 @router.post("/sell", status_code=201)
@@ -184,14 +219,14 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
     db.add(entry)
     db.flush()
 
-    # Look up Account Heads
-    acc_ar    = db.query(AccountHead).filter(AccountHead.code == "1003").first()
-    acc_cash  = db.query(AccountHead).filter(AccountHead.code == "1001").first()
-    acc_bank  = db.query(AccountHead).filter(AccountHead.code == "1002").first()
-    acc_stock = db.query(AccountHead).filter(AccountHead.code == "1004").first()
-    acc_sales = db.query(AccountHead).filter(AccountHead.code == "4001").first()
-    acc_vat   = db.query(AccountHead).filter(AccountHead.code == "2004").first()
-    acc_cogs  = db.query(AccountHead).filter(AccountHead.code == "5001").first()
+    # Look up or create Account Heads
+    acc_ar    = _get_or_create_account(db, "1003", "Accounts Receivable", "ASSET", "DEBIT")
+    acc_cash  = _get_or_create_account(db, "1001", "Cash in Hand", "ASSET", "DEBIT")
+    acc_bank  = _get_or_create_account(db, "1002", "Bank Account - NBL", "ASSET", "DEBIT")
+    acc_stock = _get_or_create_account(db, "1004", "Inventory / Stock", "ASSET", "DEBIT")
+    acc_sales = _get_or_create_account(db, "4001", "Sales Revenue", "INCOME", "CREDIT")
+    acc_vat   = _get_or_create_account(db, "2004", "VAT Payable", "LIABILITY", "CREDIT")
+    acc_cogs  = _get_or_create_account(db, "5001", "Cost of Goods Sold", "EXPENSE", "DEBIT")
 
     # Determine Payment/Receivable Account
     payment_acc = acc_ar if payload.payment_method.upper() == "CREDIT" else (acc_bank if payload.payment_method.upper() == "BANK" else acc_cash)
@@ -382,11 +417,11 @@ def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
         "narration": entry.narration,
         "total_amount_npr": total_invoice_amount,
         "company_info": {
-            "name": "Renew Gen Resources Nepal Pvt. Ltd.",
-            "pan_vat_no": "610464122",
-            "address": "New Baneshwor, Kathmandu, Nepal",
-            "phone": "+977 01-4780990 / 9851099882",
-            "email": "invoicing@renewgen.com.np",
+            "name": "ONIN Infosys Pvt. Ltd.",
+            "pan_vat_no": "609823145",
+            "address": "Pako, New Road, Kathmandu, Nepal",
+            "phone": "+977-015340320 / 9857058902",
+            "email": "info@onin.com.np",
         },
         "customer": customer_info or {"name": "Cash / Walk-in Customer", "address": "Kathmandu, Nepal", "phone": "—"},
         "lines": lines_detail,

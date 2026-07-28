@@ -7,17 +7,29 @@ import json
 from app.database import get_db
 from app.models import JournalEntry, JournalLine, AccountHead, Inventory, BankLoan
 
-router = APIRouter()
+from app.services.auth import require_roles
+
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN"]))])
 
 
-def _get_sales_revenue_account_id(db: Session) -> int | None:
+def _get_sales_revenue_account_id(db: Session) -> int:
     acc = db.query(AccountHead).filter(AccountHead.code == "4001").first()
-    return acc.id if acc else None
+    if not acc:
+        acc = AccountHead(code="4001", name="Sales Revenue", account_type="INCOME", normal_balance="CREDIT")
+        db.add(acc)
+        db.commit()
+        db.refresh(acc)
+    return acc.id
 
 
-def _get_cogs_account_id(db: Session) -> int | None:
+def _get_cogs_account_id(db: Session) -> int:
     acc = db.query(AccountHead).filter(AccountHead.code == "5001").first()
-    return acc.id if acc else None
+    if not acc:
+        acc = AccountHead(code="5001", name="Cost of Goods Sold", account_type="EXPENSE", normal_balance="DEBIT")
+        db.add(acc)
+        db.commit()
+        db.refresh(acc)
+    return acc.id
 
 
 @router.get("/")

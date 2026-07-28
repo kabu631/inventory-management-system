@@ -1,10 +1,10 @@
 <div align="center">
 
-# ⚡ Battery ERP — Inventory Management System
+# ⚡ ONIN Infosys ERP — Inventory Management System
 
-### Renew Gen Resources Nepal Pvt. Ltd.
+### ONIN Infosys Pvt. Ltd. (https://onin.com.np/)
 
-A full-stack ERP system for lithium-ion battery trading, inventory management, and financial accounting.
+A full-stack ERP system for Laptops, PC Components, and Accessories trading, inventory management, and financial accounting.
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.111-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![Next.js](https://img.shields.io/badge/Next.js-16-000000?style=for-the-badge&logo=next.js&logoColor=white)](https://nextjs.org/)
@@ -25,7 +25,7 @@ A full-stack ERP system for lithium-ion battery trading, inventory management, a
 
 ## 🎯 About
 
-**Battery ERP** is a comprehensive enterprise resource planning system designed specifically for battery distributors and traders in Nepal. It covers the **entire business workflow** — from purchasing batteries from suppliers, tracking serial numbers and warranties, managing multi-warehouse stock, selling to customers, to maintaining full **double-entry accounting** with tax-ready exports for **IRD compliance**.
+**ONIN Infosys ERP** is a comprehensive enterprise resource planning system designed specifically for **ONIN Infosys Pvt. Ltd.** (Pako, New Road, Kathmandu, Nepal), a leading retailer & distributor of laptops, PC components, and IT accessories in Nepal. It covers the **entire business workflow** — from purchasing hardware from authorized suppliers, tracking device serial numbers and warranties, managing multi-warehouse stock, selling to retail/B2B customers, to maintaining full **double-entry accounting** with tax-ready exports for **IRD compliance**.
 
 > 💡 Runs as a **desktop application** (Electron) with an embedded backend, or as a standalone **web application** with separate frontend and backend services.
 
@@ -44,19 +44,19 @@ A full-stack ERP system for lithium-ion battery trading, inventory management, a
 - PIN-protected financial privacy lock
 
 ### 📦 Inventory Management
-- SKU-based battery catalog (brand, capacity, voltage)
+- SKU-based laptop, PC component & accessory catalog (Apple, Dell, HP, ASUS, Lenovo, Intel, NVIDIA, Samsung, Corsair, Logitech, Razer)
 - Import cost & selling price tracking (NPR)
 - Real-time stock with reorder level alerts
 - Bulk stock operations
 
 ### 🏭 Multi-Warehouse
-- Multiple warehouse/depot locations
+- Multiple warehouse/depot locations (Pako New Road Store, Central Hub)
 - Inter-warehouse stock transfers
 - Per-warehouse stock visibility
 - Full transfer audit trail
 
-### 🔋 Serial & Warranty Tracking
-- Individual battery serial registration
+### 💻 Device Serial & Warranty Tracking
+- Individual laptop & hardware serial registration
 - Auto warranty expiry calculation
 - Warranty claim lifecycle management
 - Serial status tracking (IN_STOCK → SOLD → CLAIM → SCRAPPED)
@@ -230,12 +230,22 @@ npm run dev           # Dev mode (connects to localhost)
 
 ### ⚡ Quick Start (Windows)
 
+Double-click `run-app.bat` to launch both Backend and Frontend automatically, or run individual batch files:
+
 ```
-start-backend.bat      → Starts FastAPI server
-start-frontend.bat     → Starts Next.js dev server
-seed-database.bat      → Seeds sample data
-clear-database.bat     → Resets database
+run-app.bat            → 1-Click Launcher (Starts both Backend & Frontend)
+start-backend.bat      → Starts FastAPI server (http://127.0.0.1:8000)
+start-frontend.bat     → Starts Next.js dev server (http://localhost:3000)
+seed-database.bat      → Seeds sample hardware catalog & 12-month transaction data
+clear-database.bat     → Resets database and initializes clean Admin & Staff accounts
 ```
+
+#### 🔑 System Default Logins
+
+| Role | Username | Password | Access Privileges |
+|---|---|---|---|
+| 👑 **Admin** | `onininfosys` | `P@shupat1nath` | Full access to all modules, financial accounting, bank loans, analytics, settings, and user management. |
+| 🧑‍💼 **Staff** | `staff` | `staff123` | Operational access to Inventory, Invoices, Warranty/Serials, Warehouses, Purchase Orders, and Customers. |
 
 ---
 
@@ -352,7 +362,7 @@ clear-database.bat     → Resets database
 | `warehouses` | Warehouse locations |
 | `suppliers` | Vendor directory |
 | `customers` | Customer database (B2B/B2C) |
-| `inventory` | Battery SKU catalog |
+| `inventory` | Laptop, PC component & accessory catalog |
 | `battery_serials` | Serial number tracking |
 | `warranty_claims` | Warranty claim records |
 | `stock_transfers` | Inter-warehouse transfers |
@@ -374,7 +384,7 @@ clear-database.bat     → Resets database
 | ✍️ On-write | Every DB mutation | Local + Google Drive |
 | 🖱️ Manual | On demand | Local + Google Drive |
 
-> Backup location: `G:\My Drive\BatteryERP_Backups\erp_latest.db`
+> Backup location: `G:\My Drive\ONIN_ERP_Backups\erp_latest.db`
 
 ---
 
@@ -392,8 +402,8 @@ clear-database.bat     → Resets database
 
 ---
 
-**Renew Gen Resources Nepal Pvt. Ltd.** © 2025
+**ONIN Infosys Pvt. Ltd.** © 2026
 
-Built with ❤️ for the Nepali battery trading industry
+Built with ❤️ for ONIN Infosys (https://onin.com.np/) — Pako, New Road, Kathmandu
 
 </div>

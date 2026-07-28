@@ -19,7 +19,7 @@ BASE_BACKUP_DIR = LOCAL_BACKUP_DIR
 
 # Google Drive folder (G:\My Drive)
 GDRIVE_ROOT = "G:\\My Drive"
-GDRIVE_BACKUP_DIR = os.path.join(GDRIVE_ROOT, "BatteryERP_Backups")
+GDRIVE_BACKUP_DIR = os.path.join(GDRIVE_ROOT, "ONIN_ERP_Backups")
 
 
 def get_active_backup_dirs() -> List[str]:

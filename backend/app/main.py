@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.services.backup import trigger_auto_backup
-from app.routers import inventory, customers, journal, loans, analytics, backup, warehouses, serials, suppliers
+from app.routers import inventory, customers, journal, loans, analytics, backup, warehouses, serials, suppliers, users
 
 
 async def periodic_backup_task(interval_seconds: int = 1800):
@@ -51,6 +51,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(users.router, prefix="/api/auth", tags=["Auth & Users"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])
 app.include_router(journal.router, prefix="/api/journal", tags=["Journal"])
@@ -58,7 +59,7 @@ app.include_router(loans.router, prefix="/api/loans", tags=["Loans"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["Analytics"])
 app.include_router(backup.router, prefix="/api/backup", tags=["Backup"])
 app.include_router(warehouses.router, prefix="/api/warehouses", tags=["Warehouses"])
-app.include_router(serials.router, prefix="/api/serials", tags=["Battery Serials & Warranty"])
+app.include_router(serials.router, prefix="/api/serials", tags=["Device Serials & Warranty"])
 app.include_router(suppliers.router, prefix="/api/suppliers", tags=["Suppliers & PO"])
 
 
@@ -66,7 +67,7 @@ app.include_router(suppliers.router, prefix="/api/suppliers", tags=["Suppliers &
 def health():
     return {
         "status": "ok",
-        "service": "Corporate Battery ERP API v2",
+        "service": "ONIN Infosys ERP API v2",
         "auto_backup_schedule": "Every 30 Minutes (1800s) + On Every Write Entry",
-        "gdrive_destination": "G:\\My Drive\\BatteryERP_Backups\\erp_latest.db"
+        "gdrive_destination": "G:\\My Drive\\ONIN_ERP_Backups\\erp_latest.db"
     }

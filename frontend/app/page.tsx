@@ -128,7 +128,7 @@ export default function DashboardPage() {
 
   const QUICK_ACTIONS = [
     { title: "Receive Stock", desc: "Buy stock from Supplier / Vendor", href: "/suppliers", icon: Truck, color: "#22c55e" },
-    { title: "Sell Battery", desc: "Create invoice & deduct stock", href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
+    { title: "Sell Product", desc: "Create invoice & deduct stock", href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
     { title: "Stock Transfer", desc: "Move stock between depots", href: "/warehouses", icon: ArrowRightLeft, color: "#3b82f6" },
     { title: "Warranty Claim", desc: "Register serial or process claim", href: "/warranty", icon: ShieldAlert, color: "#ef4444" },
     { title: "Tax CSV Export", desc: "Export journal for IRD tax audit", href: "/journal", icon: FileSpreadsheet, color: "#f59e0b" },
@@ -141,7 +141,7 @@ export default function DashboardPage() {
         <div>
           <h1 className="page-title">Corporate Inventory Dashboard</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
-            Renew Gen Resources Nepal ERP — Live Overview &amp; Quick Operations Hub
+            ONIN Infosys ERP — Live Overview &amp; Quick Operations Hub
           </p>
         </div>
 

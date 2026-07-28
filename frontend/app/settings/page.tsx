@@ -82,8 +82,12 @@ export default function SettingsPage() {
     formData.append("file", selectedFile);
 
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/backup/restore-file`, {
         method: "POST",
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: formData,
       });
       const result = await response.json();
@@ -95,6 +99,33 @@ export default function SettingsPage() {
       flashMsg(e instanceof Error ? e.message : "Restore failed", "error");
     } finally {
       setRestoring(false);
+    }
+  };
+
+  const handleDownloadBackup = async () => {
+    try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/backup/download`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Download failed");
+      }
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `onin_erp_backup_${new Date().toISOString().split("T")[0]}.db`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      flashMsg("Database backup downloaded successfully!", "success");
+    } catch (e: unknown) {
+      flashMsg(e instanceof Error ? e.message : "Download failed", "error");
     }
   };
 
@@ -142,7 +173,7 @@ export default function SettingsPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Google Drive Cloud Sync</p>
-              <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#818cf8", marginTop: "0.375rem", fontFamily: "monospace" }}>G:\My Drive\BatteryERP_Backups</p>
+              <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#818cf8", marginTop: "0.375rem", fontFamily: "monospace" }}>G:\My Drive\ONIN_ERP_Backups</p>
               <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>Synced continuously every 30 mins</p>
             </div>
             <Cloud size={28} color="#818cf8" />
@@ -174,15 +205,13 @@ export default function SettingsPage() {
           <p className="text-muted" style={{ fontSize: "0.8rem", marginBottom: "1.25rem", lineHeight: 1.5 }}>
             Download a full copy of your SQLite database (`erp.db`) to store on a USB drive, email, or Google Drive for offline safekeeping.
           </p>
-          <a
-            href={`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/backup/download`}
-            download="battery_erp_backup.db"
+          <button
+            onClick={handleDownloadBackup}
             className="btn btn-primary"
-            style={{ textDecoration: "none" }}
             id="download-backup-btn"
           >
             <Download size={15} /> Download Backup (.db)
-          </a>
+          </button>
         </div>
 
         {/* Card 2: Restore from Uploaded File */}
