@@ -47,7 +47,13 @@ export default function SettingsPage() {
   const loadData = useCallback(() => {
     setLoading(true);
     api.get<BackupInfo>("/api/backup/list")
-      .then(setData)
+      .then(res => {
+        if (res && Array.isArray(res.backups)) {
+          setData(res);
+        } else {
+          setData({ backup_directory: "", latest_backup_file: "", backups: [] });
+        }
+      })
       .catch(err => setMsg({ text: err.message || "Failed to fetch backup info", type: "error" }))
       .finally(() => setLoading(false));
   }, []);
@@ -201,7 +207,7 @@ export default function SettingsPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Snapshot History</p>
-              <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#f59e0b", marginTop: "0.375rem" }}>{data?.backups.length || 0} Snapshots</p>
+              <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "#f59e0b", marginTop: "0.375rem" }}>{data?.backups?.length || 0} Snapshots</p>
               <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>Point-in-time recovery</p>
             </div>
             <Clock size={28} color="#f59e0b" />
@@ -302,7 +308,7 @@ export default function SettingsPage() {
               </tr>
             </thead>
             <tbody>
-              {data?.backups.map((b) => (
+              {(Array.isArray(data?.backups) ? data.backups : []).map((b) => (
                 <tr key={b.filename}>
                   <td style={{ fontWeight: 500 }}>
                     <code style={{ fontSize: "0.78rem", color: b.is_latest ? "#22c55e" : "#818cf8" }}>{b.filename}</code>
