@@ -48,7 +48,10 @@ def trigger_auto_backup() -> str:
     """
     Overwrites and replaces the single backup file ('erp_latest.db') on every write action.
     Target destinations: Local backups and Google Drive ('G:\\My Drive\\BatteryERP_Backups\\erp_latest.db').
+    Also automatically schedules a git commit + push to GitHub so the database is always in sync.
     """
+    from app.services.git_sync import schedule_git_push
+
     primary_file = ""
     try:
         target_dirs = get_active_backup_dirs()
@@ -70,6 +73,9 @@ def trigger_auto_backup() -> str:
 
             if not primary_file:
                 primary_file = backup_file_path
+
+        # Auto-push the live database file to GitHub (debounced, runs in background thread)
+        schedule_git_push(DB_PATH)
 
         return primary_file
     except Exception as e:

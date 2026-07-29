@@ -1,5 +1,4 @@
-# Database files
-*.db
+# Database - track main erp.db but ignore WAL/SHM temp files and backup copies
 *.db-shm
 *.db-wal
 backend/backups/
