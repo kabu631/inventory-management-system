@@ -1,9 +1,11 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
+import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   ShieldCheck, Download, Upload, RefreshCw,
-  HardDrive, FileSpreadsheet, CheckCircle2, AlertCircle, Clock, Cloud
+  HardDrive, FileSpreadsheet, CheckCircle2, AlertCircle, Clock, Cloud, ShieldAlert
 } from "lucide-react";
 
 interface BackupItem {
@@ -21,6 +23,21 @@ interface BackupInfo {
 }
 
 export default function SettingsPage() {
+  const { user } = useAuth();
+  if (user && user.role !== "ADMIN") {
+    return (
+      <div style={{ padding: "4rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin Access Required</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
+          System database backup, disaster recovery, and state restoration are restricted strictly to company administrators.
+        </p>
+        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
+      </div>
+    );
+  }
   const [data, setData] = useState<BackupInfo | null>(null);
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState({ text: "", type: "" });

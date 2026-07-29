@@ -1,7 +1,9 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
 import { api, formatNPR, formatDate } from "@/lib/api";
-import { Landmark, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Edit3, Trash2 } from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
+import { Landmark, Plus, X, CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Edit3, Trash2, ShieldAlert } from "lucide-react";
 
 interface LoanSummary {
   id: number; bank_name: string; loan_account_no: string;
@@ -18,6 +20,21 @@ interface AggregateSummary {
 }
 
 export default function LoansPage() {
+  const { user } = useAuth();
+  if (user && user.role !== "ADMIN") {
+    return (
+      <div style={{ padding: "4rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Investor Access Required</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
+          Bank loan records, corporate borrowing, and interest repayment liabilities are restricted strictly to company administrators and investors.
+        </p>
+        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
+      </div>
+    );
+  }
   const [loans, setLoans] = useState<LoanSummary[]>([]);
   const [agg, setAgg] = useState<AggregateSummary | null>(null);
   const [loading, setLoading] = useState(true);

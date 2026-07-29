@@ -2,10 +2,11 @@
 import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { api, formatNPR } from "@/lib/api";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   TrendingUp, Package, Landmark, BookOpen, ArrowUpRight,
   Truck, ShoppingBag, ArrowRightLeft, ShieldAlert, FileSpreadsheet,
-  Eye, EyeOff, Lock, Unlock, X, ShieldCheck
+  Eye, EyeOff, Lock, Unlock, X, ShieldCheck, Users, Building2
 } from "lucide-react";
 
 // ── password stored in env var (set NEXT_PUBLIC_DASHBOARD_PIN in .env.local)
@@ -16,6 +17,7 @@ interface KPIs {
   total_revenue_npr: number; total_cogs_npr: number;
   total_gross_profit_npr: number; inventory_value_npr: number;
   active_loans: number; total_loan_principal_npr: number;
+  total_investor_capital_npr: number; total_bank_loan_capital_npr: number;
 }
 interface MonthRow {
   month: string; revenue_npr: number; cogs_npr: number;
@@ -27,6 +29,10 @@ interface JournalEntry {
 }
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const isAccountant = user?.role === "ACCOUNTANT";
+
   const [kpis, setKpis] = useState<KPIs | null>(null);
   const [monthly, setMonthly] = useState<MonthRow[]>([]);
   const [recent, setRecent] = useState<JournalEntry[]>([]);
@@ -127,11 +133,11 @@ export default function DashboardPage() {
   ] : [];
 
   const QUICK_ACTIONS = [
-    { title: "Receive Stock", desc: "Buy stock from Supplier / Vendor", href: "/suppliers", icon: Truck, color: "#22c55e" },
+    ...(isAdmin ? [{ title: "Receive Stock", desc: "Buy stock from Supplier / Vendor", href: "/suppliers", icon: Truck, color: "#22c55e" }] : []),
     { title: "Sell Battery", desc: "Create invoice & deduct stock", href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
     { title: "Stock Transfer", desc: "Move stock between depots", href: "/warehouses", icon: ArrowRightLeft, color: "#3b82f6" },
     { title: "Warranty Claim", desc: "Register serial or process claim", href: "/warranty", icon: ShieldAlert, color: "#ef4444" },
-    { title: "Tax CSV Export", desc: "Export journal for IRD tax audit", href: "/journal", icon: FileSpreadsheet, color: "#f59e0b" },
+    ...(isAdmin ? [{ title: "Tax CSV Export", desc: "Export journal for IRD tax audit", href: "/journal", icon: FileSpreadsheet, color: "#f59e0b" }] : []),
   ];
 
   return (
@@ -139,88 +145,231 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="page-header">
         <div>
-          <h1 className="page-title">Corporate Inventory Dashboard</h1>
+          <h1 className="page-title">{isAdmin ? "Corporate Inventory Dashboard" : isAccountant ? "Accountant Audit & Compliance Portal" : "Staff Operations & Sales Portal"}</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
-            Renew Gen Resources Nepal ERP — Live Overview &amp; Quick Operations Hub
+            Renew Gen Resources ERP — {isAdmin ? "Live Overview & Quick Operations Hub" : isAccountant ? `Welcome, ${user?.full_name || "Accountant"} (${user?.staff_id || "ACC-001"})` : `Welcome, ${user?.full_name || "Staff"} (${user?.staff_id || "EMP-102"})`}
           </p>
         </div>
 
-        {/* Privacy toggle button */}
-        <button
-          id="privacy-toggle-btn"
-          onClick={openLockModal}
-          title={unlocked ? "Click to lock financial data" : "Click to reveal financial data"}
-          style={{
-            display: "flex", alignItems: "center", gap: "0.5rem",
-            padding: "0.5rem 1rem",
-            borderRadius: "0.625rem",
-            border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
-            background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
-            color: unlocked ? "#22c55e" : "#ef4444",
-            cursor: "pointer",
-            fontWeight: 600,
-            fontSize: "0.8rem",
-            transition: "all 0.2s ease",
-          }}
-        >
-          {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
-          {unlocked ? "Lock Financials" : "Unlock Financials"}
-        </button>
+        {/* Privacy toggle button (Admin only) */}
+        {isAdmin ? (
+          <button
+            id="privacy-toggle-btn"
+            onClick={openLockModal}
+            title={unlocked ? "Click to lock financial data" : "Click to reveal financial data"}
+            style={{
+              display: "flex", alignItems: "center", gap: "0.5rem",
+              padding: "0.5rem 1rem",
+              borderRadius: "0.625rem",
+              border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
+              background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+              color: unlocked ? "#22c55e" : "#ef4444",
+              cursor: "pointer",
+              fontWeight: 600,
+              fontSize: "0.8rem",
+              transition: "all 0.2s ease",
+            }}
+          >
+            {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
+            {unlocked ? "Lock Financials" : "Unlock Financials"}
+          </button>
+        ) : isAccountant ? (
+          <div style={{ padding: "0.375rem 0.875rem", borderRadius: "0.5rem", background: "rgba(245, 158, 11, 0.1)", border: "1px solid rgba(245, 158, 11, 0.25)", color: "#f59e0b", fontSize: "0.78rem", fontWeight: 700 }}>
+            📊 Accountant Audit Mode
+          </div>
+        ) : (
+          <div style={{ padding: "0.375rem 0.875rem", borderRadius: "0.5rem", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.25)", color: "#818cf8", fontSize: "0.78rem", fontWeight: 700 }}>
+            🛡️ Staff Access Mode
+          </div>
+        )}
       </div>
 
-      {/* KPI Cards */}
+      {/* KPI Cards / Operational Cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1.25rem", marginBottom: "2rem" }}>
-        {kpiCards.map((k) => (
-          <div key={k.label} className={`kpi-card ${k.glowClass}`} style={{ position: "relative" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-              <div style={{ flex: 1 }}>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
-                  {k.label}
-                </p>
-                <p style={{
-                  fontSize: "1.4rem", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2,
-                  filter: unlocked ? "none" : "blur(6px)",
-                  userSelect: unlocked ? "auto" : "none",
-                  transition: "filter 0.3s ease",
-                  letterSpacing: unlocked ? "normal" : "0.1em",
+        {isAdmin ? (
+          kpiCards.map((k) => (
+            <div key={k.label} className={`kpi-card ${k.glowClass}`} style={{ position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>
+                    {k.label}
+                  </p>
+                  <p style={{
+                    fontSize: "1.4rem", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.2,
+                    filter: unlocked ? "none" : "blur(6px)",
+                    userSelect: unlocked ? "auto" : "none",
+                    transition: "filter 0.3s ease",
+                    letterSpacing: unlocked ? "normal" : "0.1em",
+                  }}>
+                    {k.value}
+                  </p>
+                  <p style={{
+                    fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.375rem",
+                    filter: unlocked ? "none" : "blur(4px)",
+                    transition: "filter 0.3s ease",
+                  }}>
+                    {k.sub}
+                  </p>
+                </div>
+                <div style={{
+                  padding: "0.5rem",
+                  borderRadius: "0.5rem",
+                  background: `${k.color}15`,
+                  border: `1px solid ${k.color}30`,
                 }}>
-                  {k.value}
-                </p>
-                <p style={{
-                  fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.375rem",
-                  filter: unlocked ? "none" : "blur(4px)",
-                  transition: "filter 0.3s ease",
-                }}>
-                  {k.sub}
-                </p>
+                  <k.icon size={18} color={k.color} />
+                </div>
               </div>
-              <div style={{
-                padding: "0.5rem",
-                borderRadius: "0.5rem",
-                background: `${k.color}15`,
-                border: `1px solid ${k.color}30`,
+
+              {/* Lock overlay hint */}
+              {!unlocked && (
+                <button
+                  onClick={openLockModal}
+                  style={{
+                    position: "absolute", inset: 0,
+                    background: "transparent",
+                    border: "none", cursor: "pointer",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    borderRadius: "inherit",
+                  }}
+                  title="Click to unlock financials"
+                />
+              )}
+            </div>
+          ))
+        ) : (
+          (isAccountant ? [
+            { title: "Journal & Tax Audit Ledger", desc: "Audit double-entry postings & export IRD tax reports", href: "/journal", icon: BookOpen, color: "#f59e0b" },
+            { title: "Stock Audit & Remaining Qty", desc: "Audit live battery stock counts & selling prices", href: "/inventory", icon: Package, color: "#10b981" },
+            { title: "Depots & Warehouse Stock", desc: "Audit stock distribution across depots", href: "/warehouses", icon: Building2, color: "#3b82f6" },
+            { title: "Customer Receivables", desc: "Review customer balances & invoice transaction history", href: "/customers", icon: Users, color: "#818cf8" },
+          ] : [
+            { title: "Sell Battery & Check Prices", desc: "View catalog prices & create customer invoice", href: "/inventory", icon: ShoppingBag, color: "#10b981" },
+            { title: "Depots & Warehouse Stock", desc: "Check stock quantity across warehouse locations", href: "/warehouses", icon: Building2, color: "#3b82f6" },
+            { title: "Battery Serials & Warranty", desc: "Verify serial numbers & register warranty claims", href: "/warranty", icon: ShieldAlert, color: "#f59e0b" },
+            { title: "Customers Directory", desc: "Manage B2B & B2C customer contacts", href: "/customers", icon: Users, color: "#818cf8" },
+          ]).map(c => (
+            <Link key={c.title} href={c.href} className="kpi-card glow-indigo" style={{ textDecoration: "none", display: "block" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.25rem" }}>{c.title}</p>
+                  <p style={{ fontSize: "0.72rem", color: "var(--text-muted)" }}>{c.desc}</p>
+                </div>
+                <div style={{ padding: "0.4rem", borderRadius: "0.5rem", background: `${c.color}18`, border: `1px solid ${c.color}30` }}>
+                  <c.icon size={18} color={c.color} />
+                </div>
+              </div>
+            </Link>
+          ))
+        )}
+      </div>
+
+      {/* Capital & Funding Overview Banner (Admin only) */}
+      {isAdmin && kpis && (
+        <div style={{
+          marginBottom: "2rem",
+          padding: "1.25rem 1.5rem",
+          borderRadius: "0.75rem",
+          background: "linear-gradient(135deg, rgba(16,185,129,0.06) 0%, rgba(59,130,246,0.06) 50%, rgba(168,85,247,0.06) 100%)",
+          border: "1px solid rgba(16,185,129,0.18)",
+          position: "relative",
+          overflow: "hidden",
+        }}>
+          {/* Decorative glow */}
+          <div style={{
+            position: "absolute", top: "-20px", right: "-20px", width: "120px", height: "120px",
+            background: "radial-gradient(circle, rgba(16,185,129,0.12) 0%, transparent 70%)",
+            borderRadius: "50%", pointerEvents: "none",
+          }} />
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1rem" }}>
+            <Landmark size={18} color="#10b981" />
+            <h3 style={{ fontSize: "0.9rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+              Capital & Funding Overview
+            </h3>
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem" }}>
+            {/* Investor Equity */}
+            <div style={{
+              padding: "0.875rem 1rem",
+              borderRadius: "0.625rem",
+              background: "rgba(16,185,129,0.08)",
+              border: "1px solid rgba(16,185,129,0.2)",
+            }}>
+              <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em", marginBottom: "0.375rem" }}>
+                💼 Investor Equity Capital
+              </p>
+              <p style={{
+                fontSize: "1.15rem", fontWeight: 800, color: "#10b981", margin: 0,
+                filter: unlocked ? "none" : "blur(6px)", transition: "filter 0.3s ease",
               }}>
-                <k.icon size={18} color={k.color} />
-              </div>
+                {unlocked ? formatNPR(kpis.total_investor_capital_npr) : "••••••"}
+              </p>
             </div>
 
-            {/* Lock overlay hint */}
-            {!unlocked && (
-              <button
-                onClick={openLockModal}
-                style={{
-                  position: "absolute", inset: 0,
-                  background: "transparent",
-                  border: "none", cursor: "pointer",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  borderRadius: "inherit",
-                }}
-                title="Click to unlock financials"
-              />
-            )}
+            {/* Bank Loan Funds */}
+            <div style={{
+              padding: "0.875rem 1rem",
+              borderRadius: "0.625rem",
+              background: "rgba(59,130,246,0.08)",
+              border: "1px solid rgba(59,130,246,0.2)",
+            }}>
+              <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em", marginBottom: "0.375rem" }}>
+                🏦 Bank Loan Funds
+              </p>
+              <p style={{
+                fontSize: "1.15rem", fontWeight: 800, color: "#3b82f6", margin: 0,
+                filter: unlocked ? "none" : "blur(6px)", transition: "filter 0.3s ease",
+              }}>
+                {unlocked ? formatNPR(kpis.total_bank_loan_capital_npr) : "••••••"}
+              </p>
+            </div>
+
+            {/* Inventory Value (Utilized) */}
+            <div style={{
+              padding: "0.875rem 1rem",
+              borderRadius: "0.625rem",
+              background: "rgba(245,158,11,0.08)",
+              border: "1px solid rgba(245,158,11,0.2)",
+            }}>
+              <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em", marginBottom: "0.375rem" }}>
+                📦 Utilized in Inventory
+              </p>
+              <p style={{
+                fontSize: "1.15rem", fontWeight: 800, color: "#f59e0b", margin: 0,
+                filter: unlocked ? "none" : "blur(6px)", transition: "filter 0.3s ease",
+              }}>
+                {unlocked ? formatNPR(kpis.inventory_value_npr) : "••••••"}
+              </p>
+            </div>
+
+            {/* Remaining Capital */}
+            <div style={{
+              padding: "0.875rem 1rem",
+              borderRadius: "0.625rem",
+              background: "linear-gradient(135deg, rgba(168,85,247,0.1) 0%, rgba(99,102,241,0.1) 100%)",
+              border: "1px solid rgba(168,85,247,0.25)",
+            }}>
+              <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em", marginBottom: "0.375rem" }}>
+                💰 Remaining Capital
+              </p>
+              <p style={{
+                fontSize: "1.2rem", fontWeight: 900, margin: 0,
+                color: (kpis.total_investor_capital_npr + kpis.total_bank_loan_capital_npr - kpis.inventory_value_npr) >= 0 ? "#a855f7" : "#ef4444",
+                filter: unlocked ? "none" : "blur(6px)", transition: "filter 0.3s ease",
+              }}>
+                {unlocked ? formatNPR(kpis.total_investor_capital_npr + kpis.total_bank_loan_capital_npr - kpis.inventory_value_npr) : "••••••"}
+              </p>
+              {unlocked && (
+                <p style={{ fontSize: "0.65rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  Equity + Loans − Stock
+                </p>
+              )}
+            </div>
           </div>
-        ))}
-      </div>
+        </div>
+      )}
 
       {/* Layman Quick Action Hub */}
       <div style={{ marginBottom: "2rem" }}>
@@ -289,12 +438,14 @@ export default function DashboardPage() {
         <div className="card" style={{ padding: "1.5rem" }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem" }}>
             <div>
-              <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>Recent Transactions</h2>
-              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>Latest double-entry postings</p>
+              <h2 style={{ fontSize: "1rem", fontWeight: 600, color: "var(--text-primary)" }}>{isAdmin ? "Recent Journal Postings" : "Recent Product Sales & Activity"}</h2>
+              <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{isAdmin ? "Latest double-entry accounting records" : "Real-time activity on shared company database"}</p>
             </div>
-            <Link href="/journal" style={{ fontSize: "0.75rem", color: "#818cf8", textDecoration: "none", fontWeight: 600 }}>
-              View all →
-            </Link>
+            {isAdmin && (
+              <Link href="/journal" style={{ fontSize: "0.75rem", color: "#818cf8", textDecoration: "none", fontWeight: 600 }}>
+                View all →
+              </Link>
+            )}
           </div>
           {recent.length === 0 ? (
             <div style={{ padding: "2rem 0", textAlign: "center", color: "var(--text-muted)", fontSize: "0.875rem" }}>
@@ -317,14 +468,18 @@ export default function DashboardPage() {
                       {entry.entry_date}
                     </p>
                   </div>
-                  <span style={{
-                    fontSize: "0.85rem", fontWeight: 700, color: "#818cf8",
-                    filter: unlocked ? "none" : "blur(5px)",
-                    transition: "filter 0.3s ease",
-                    userSelect: unlocked ? "auto" : "none",
-                  }}>
-                    {formatNPR(entry.total_debit_npr)}
-                  </span>
+                  {isAdmin ? (
+                    <span style={{
+                      fontSize: "0.85rem", fontWeight: 700, color: "#818cf8",
+                      filter: unlocked ? "none" : "blur(5px)",
+                      transition: "filter 0.3s ease",
+                      userSelect: unlocked ? "auto" : "none",
+                    }}>
+                      {formatNPR(entry.total_debit_npr)}
+                    </span>
+                  ) : (
+                    <span className="badge badge-green" style={{ fontSize: "0.7rem" }}>RECORDED</span>
+                  )}
                 </div>
               ))}
             </div>

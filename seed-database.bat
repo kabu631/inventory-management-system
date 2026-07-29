@@ -1,5 +1,5 @@
 @echo off
-title Battery ERP — Seed Database
+title Renew Gen Resources — Seed Database
 echo [Battery ERP] Seeding database...
 set PYTHONPATH=C:\Users\kabin\OneDrive\Desktop\erp\Lib\site-packages
 cd /d "%~dp0backend"

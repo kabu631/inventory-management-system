@@ -5,7 +5,7 @@ from datetime import date
 import json
 
 from app.database import get_db
-from app.models import JournalEntry, JournalLine, AccountHead, Inventory, BankLoan
+from app.models import JournalEntry, JournalLine, AccountHead, Inventory, BankLoan, Investor, InvestmentRecord
 
 router = APIRouter()
 
@@ -22,7 +22,10 @@ def _get_cogs_account_id(db: Session) -> int | None:
 
 @router.get("/")
 def analytics_overview(db: Session = Depends(get_db)):
-    """Monthly revenue, COGS, and gross profit for the last 12 months."""
+    # Auto-repair account heads if missing
+    from app.routers.journal import ensure_default_account_heads
+    ensure_default_account_heads(db)
+
     sales_acc_id = _get_sales_revenue_account_id(db)
     cogs_acc_id = _get_cogs_account_id(db)
 
@@ -63,6 +66,17 @@ def analytics_overview(db: Session = Depends(get_db)):
             monthly_data.setdefault(key, {"month": key, "revenue_npr": 0, "cogs_npr": 0})
             monthly_data[key]["cogs_npr"] += float(row.cogs or 0)
 
+    # Fallback / Backup check on JournalEntries directly if lines were omitted
+    sale_entries = db.query(JournalEntry).all()
+    for je in sale_entries:
+        if je.reference and (je.reference.startswith("INV-") or "Sale of" in (je.narration or "")):
+            key = je.entry_date.strftime("%Y-%m")
+            monthly_data.setdefault(key, {"month": key, "revenue_npr": 0, "cogs_npr": 0})
+            # Ensure revenue isn't 0 if entry exists
+            if monthly_data[key]["revenue_npr"] == 0 and je.lines:
+                total_entry_debit = sum(l.debit_npr for l in je.lines if l.debit_npr > 0)
+                monthly_data[key]["revenue_npr"] = total_entry_debit
+
     result = sorted(monthly_data.values(), key=lambda x: x["month"])
     for row in result:
         row["revenue_npr"] = round(row["revenue_npr"], 2)
@@ -82,6 +96,10 @@ def analytics_overview(db: Session = Depends(get_db)):
     active_loans = db.query(BankLoan).filter(BankLoan.is_closed == False).count()
     total_loan_principal = db.query(func.sum(BankLoan.principal_npr)).filter(BankLoan.is_closed == False).scalar() or 0
 
+    # Investor capital & bank loan remaining capital
+    total_investor_capital = db.query(func.sum(InvestmentRecord.amount_npr)).scalar() or 0
+    total_bank_loan_capital = float(total_loan_principal)
+
     return {
         "monthly": result,
         "kpis": {
@@ -91,6 +109,8 @@ def analytics_overview(db: Session = Depends(get_db)):
             "inventory_value_npr": round(float(inventory_value), 2),
             "active_loans": active_loans,
             "total_loan_principal_npr": round(float(total_loan_principal), 2),
+            "total_investor_capital_npr": round(float(total_investor_capital), 2),
+            "total_bank_loan_capital_npr": round(float(total_bank_loan_capital), 2),
         },
     }
 

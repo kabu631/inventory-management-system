@@ -100,12 +100,14 @@ class SaleItemIn(BaseModel):
 
 class SalesInvoiceCreate(BaseModel):
     customer_id: int
-    payment_method: str  # "CREDIT", "CASH", "BANK"
+    payment_method: str  # "CREDIT", "CASH", "BANK", "PARTIAL"
     invoice_date: date
     reference: Optional[str] = None
     items: List[SaleItemIn]
     apply_vat: Optional[bool] = False
     vat_rate: Optional[float] = 13.0
+    paid_amount_npr: Optional[float] = None
+    partial_payment_method: Optional[str] = "BANK"  # "CASH" or "BANK" for upfront payment portion
 
 
 @router.post("/sell", status_code=201)
@@ -114,8 +116,8 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
     Sells products to a customer:
     1. Validates stock availability.
     2. Decrements Inventory.stock_qty in real time.
-    3. Updates Customer.outstanding_balance_npr if sold on Credit.
-    4. Auto-posts balanced double-entry Journal Entry (AR/Cash, Sales Revenue, VAT Payable, COGS, Stock Reduction).
+    3. Handles Full Cash, Full Bank, Full Credit, or Partial Payments (Upfront Cash/Bank + Remaining Credit).
+    4. Auto-posts balanced double-entry Journal Entry (AR / Cash / Bank, Sales Revenue, VAT Payable, COGS, Stock Reduction).
     5. Triggers automated backup to Google Drive.
     """
     if not payload.items:
@@ -158,23 +160,45 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
         rate = payload.vat_rate if payload.vat_rate is not None else 13.0
         vat_amount = round(subtotal_revenue * (rate / 100.0), 2)
 
-    grand_total_revenue = subtotal_revenue + vat_amount
+    grand_total_revenue = round(subtotal_revenue + vat_amount, 2)
 
-    # 2. Update Customer Balance & Enforce Credit Limit if CREDIT
-    if payload.payment_method.upper() == "CREDIT":
+    # 2. Determine Paid Amount (Upfront) vs Credit Due
+    method_upper = payload.payment_method.upper()
+
+    if payload.paid_amount_npr is not None and payload.paid_amount_npr > 0:
+        paid_amount = round(max(0.0, min(float(payload.paid_amount_npr), grand_total_revenue)), 2)
+        credit_due = round(grand_total_revenue - paid_amount, 2)
+        is_partial = credit_due > 0
+    elif method_upper == "CREDIT":
+        paid_amount = 0.0
+        credit_due = grand_total_revenue
+        is_partial = False
+    elif method_upper in ("CASH", "BANK"):
+        paid_amount = grand_total_revenue
+        credit_due = 0.0
+        is_partial = False
+    else:
+        paid_amount = 0.0
+        credit_due = grand_total_revenue
+        is_partial = False
+
+    # 3. Enforce Credit Limit if there is a remaining credit due portion
+    if credit_due > 0:
         current_balance = get_customer_balance(db, customer.id)
-        if customer.credit_limit > 0 and (current_balance + grand_total_revenue) > customer.credit_limit:
-            new_total = current_balance + grand_total_revenue
+        if customer.credit_limit > 0 and (current_balance + credit_due) > customer.credit_limit:
+            new_total = current_balance + credit_due
             raise HTTPException(
                 status_code=400,
-                detail=f"Credit Limit Exceeded for '{customer.name}'! Max Credit Limit: Rs.{customer.credit_limit:,.2f}, Current Due: Rs.{current_balance:,.2f}, New Bill Total: Rs.{new_total:,.2f}"
+                detail=f"Credit Limit Exceeded for '{customer.name}'! Max Credit Limit: Rs.{customer.credit_limit:,.2f}, Current Due: Rs.{current_balance:,.2f}, Remaining Invoice Credit: Rs.{credit_due:,.2f}, New Total Balance: Rs.{new_total:,.2f}"
             )
 
-    # 3. Create Journal Entry
+    # 4. Create Journal Entry
     ref = payload.reference or f"INV-{payload.invoice_date.strftime('%Y%m%d')}-{customer.id}"
     item_names = ", ".join([f"{pi['qty']}x {pi['sku'].name}" for pi in processed_items])
     vat_str = " (incl. 13% VAT)" if payload.apply_vat else ""
     narration = f"Sale of {item_names} to {customer.name} ({payload.payment_method}){vat_str}"
+    if is_partial and paid_amount > 0 and credit_due > 0:
+        narration += f" — Paid Rs.{paid_amount:,.2f}, Remaining Due Rs.{credit_due:,.2f}"
 
     entry = JournalEntry(
         entry_date=payload.invoice_date,
@@ -183,6 +207,10 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
     )
     db.add(entry)
     db.flush()
+
+    # Ensure Account Heads exist in database
+    from app.routers.journal import ensure_default_account_heads
+    ensure_default_account_heads(db)
 
     # Look up Account Heads
     acc_ar    = db.query(AccountHead).filter(AccountHead.code == "1003").first()
@@ -193,14 +221,26 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
     acc_vat   = db.query(AccountHead).filter(AccountHead.code == "2004").first()
     acc_cogs  = db.query(AccountHead).filter(AccountHead.code == "5001").first()
 
-    # Determine Payment/Receivable Account
-    payment_acc = acc_ar if payload.payment_method.upper() == "CREDIT" else (acc_bank if payload.payment_method.upper() == "BANK" else acc_cash)
+    # Debit Upfront Payment (Cash or Bank)
+    if paid_amount > 0:
+        upfront_method = (payload.partial_payment_method or "BANK").upper()
+        if method_upper in ("CASH", "BANK"):
+            upfront_method = method_upper
+        upfront_acc = acc_bank if upfront_method == "BANK" else acc_cash
 
-    if payment_acc:
-        db.add(JournalLine(
-            entry_id=entry.id, account_id=payment_acc.id, customer_id=customer.id,
-            debit_npr=grand_total_revenue, credit_npr=0.0, description=f"Payment/Receivable from {customer.name}"
-        ))
+        if upfront_acc:
+            db.add(JournalLine(
+                entry_id=entry.id, account_id=upfront_acc.id, customer_id=customer.id,
+                debit_npr=paid_amount, credit_npr=0.0, description=f"Upfront Payment ({upfront_method}) from {customer.name}"
+            ))
+
+    # Debit Remaining Credit Balance Due (Accounts Receivable)
+    if credit_due > 0:
+        if acc_ar:
+            db.add(JournalLine(
+                entry_id=entry.id, account_id=acc_ar.id, customer_id=customer.id,
+                debit_npr=credit_due, credit_npr=0.0, description=f"Remaining Credit Balance Due from {customer.name}"
+            ))
 
     if acc_sales:
         db.add(JournalLine(
@@ -229,13 +269,15 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
     db.commit()
     db.refresh(entry)
 
-    # 4. Trigger Real-Time Backup to Google Drive
+    # 5. Trigger Real-Time Backup to Google Drive
     trigger_auto_backup()
 
     return {
         "status": "success",
-        "message": f"Sales invoice created successfully for {customer.name}!",
+        "message": f"Sales invoice created for {customer.name}! (Paid: Rs.{paid_amount:,.2f}, Remaining Due: Rs.{credit_due:,.2f})",
         "total_revenue_npr": grand_total_revenue,
+        "paid_amount_npr": paid_amount,
+        "remaining_credit_npr": credit_due,
         "total_cogs_npr": total_cogs,
         "journal_entry_id": entry.id,
     }
@@ -248,18 +290,19 @@ class PurchaseItemIn(BaseModel):
 
 
 class InventoryPurchaseCreate(BaseModel):
-    payment_method: str  # "BANK" (Bank Loan Funds), "CASH", "SUPPLIER_CREDIT"
+    payment_method: str  # "BANK", "LOAN", "INVESTOR", "CASH", "SUPPLIER_CREDIT"
     purchase_date: date
     reference: Optional[str] = None
+    loan_id: Optional[int] = None
     items: List[PurchaseItemIn]
 
 
 @router.post("/purchase", status_code=201)
 def create_inventory_purchase(payload: InventoryPurchaseCreate, db: Session = Depends(get_db)):
     """
-    Purchases/imports inventory using Bank Loan funds, Cash, or Supplier Credit:
+    Purchases/imports inventory using Bank Loan funds, Investor Equity Capital, Cash, or Supplier Credit:
     1. Increases Inventory stock_qty.
-    2. Auto-posts balanced double-entry Journal Entry (Debit 1004 Inventory / Credit 1002 Bank or 2001 AP).
+    2. Auto-posts balanced double-entry Journal Entry (Debit 1004 Inventory / Credit 1002 Bank or 2002 Bank Loan).
     3. Triggers automated backup to Google Drive.
     """
     if not payload.items:
@@ -284,11 +327,26 @@ def create_inventory_purchase(payload: InventoryPurchaseCreate, db: Session = De
 
         processed_items.append({"sku": sku, "qty": item_in.quantity, "unit_cost": unit_cost})
 
+    # Look up specific Bank Loan if loan_id provided
+    loan_info = ""
+    if payload.loan_id:
+        from app.models import BankLoan
+        loan = db.query(BankLoan).filter(BankLoan.id == payload.loan_id).first()
+        if loan:
+            loan_info = f" ({loan.bank_name} #{loan.loan_account_no})"
+
     # Journal Entry: Debit Inventory (1004) / Credit Bank Account (1002) or Cash (1001) or AP (2001)
     ref = payload.reference or f"PO-{payload.purchase_date.strftime('%Y%m%d')}"
     item_names = ", ".join([f"{pi['qty']}x {pi['sku'].name}" for pi in processed_items])
-    payment_label = "Bank Loan / Bank Account" if payload.payment_method.upper() == "BANK" else payload.payment_method.upper()
-    narration = f"Purchased {item_names} using {payment_label} funds"
+    
+    if payload.payment_method.upper() in ["LOAN", "BANK_LOAN"]:
+        payment_label = f"Bank Loan Funds{loan_info}"
+    elif payload.payment_method.upper() == "INVESTOR":
+        payment_label = "Investor Equity Capital"
+    else:
+        payment_label = "Bank / Cash Account" if payload.payment_method.upper() == "BANK" else payload.payment_method.upper()
+        
+    narration = f"Purchased {item_names} using {payment_label}"
 
     entry = JournalEntry(
         entry_date=payload.purchase_date,
@@ -382,11 +440,11 @@ def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
         "narration": entry.narration,
         "total_amount_npr": total_invoice_amount,
         "company_info": {
-            "name": "Renew Gen Resources Nepal Pvt. Ltd.",
+            "name": "Renew Gen Resources",
             "pan_vat_no": "610464122",
-            "address": "New Baneshwor, Kathmandu, Nepal",
-            "phone": "+977 01-4780990 / 9851099882",
-            "email": "invoicing@renewgen.com.np",
+            "address": "Babarmahal Kathmandu",
+            "phone": "+977 01-4573200",
+            "email": "info@renewgenresources.com",
         },
         "customer": customer_info or {"name": "Cash / Walk-in Customer", "address": "Kathmandu, Nepal", "phone": "—"},
         "lines": lines_detail,

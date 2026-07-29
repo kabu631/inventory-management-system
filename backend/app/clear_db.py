@@ -1,7 +1,7 @@
 """
-Script to wipe all data from the database.
-Optionally recreates the standard Chart of Accounts so the ERP is ready for fresh data.
-Run: python -m app.clear_db
+Script to wipe all operational data from the database.
+Re-initializes standard default users and Chart of Accounts so the ERP is ready for fresh data from scratch.
+Run: py -m app.clear_db
 """
 import os
 import sys
@@ -11,34 +11,41 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from app.database import SessionLocal, engine, Base
 from app.models import (
-    Customer, Inventory, AccountHead, JournalEntry,
-    JournalLine, BankLoan, LoanRepayment,
+    Customer, Inventory, AccountHead, JournalEntry, JournalLine,
+    BankLoan, LoanRepayment, Investor, InvestmentRecord, BatterySerial,
+    WarrantyClaim, StockTransfer, PurchaseOrder, PurchaseOrderItem, Supplier, Warehouse
 )
-from app.seed import ACCOUNT_HEADS
+from app.routers.auth import ensure_default_users
+from app.routers.journal import ensure_default_account_heads
 
-def clear_db(seed_chart_of_accounts=True):
-    print("Clearing all data from SQLite database...")
+def clear_db():
+    print("Wiping all operational data from SQLite database...")
     db = SessionLocal()
     try:
-        # Drop all data using SQLAlchemy metadata or direct DELETE
+        # Delete in order of foreign key dependencies
+        db.query(WarrantyClaim).delete()
+        db.query(BatterySerial).delete()
+        db.query(StockTransfer).delete()
+        db.query(PurchaseOrderItem).delete()
+        db.query(PurchaseOrder).delete()
         db.query(LoanRepayment).delete()
         db.query(BankLoan).delete()
+        db.query(InvestmentRecord).delete()
+        db.query(Investor).delete()
         db.query(JournalLine).delete()
         db.query(JournalEntry).delete()
-        db.query(Customer).delete()
         db.query(Inventory).delete()
-        db.query(AccountHead).delete()
+        db.query(Customer).delete()
+        db.query(Supplier).delete()
         db.commit()
-        print("  All tables cleared successfully.")
+        print("  - All operational data tables cleared successfully.")
 
-        if seed_chart_of_accounts:
-            print("  Seeding default Chart of Accounts...")
-            for ah in ACCOUNT_HEADS:
-                db.add(AccountHead(**ah))
-            db.commit()
-            print(f"  Initialized {len(ACCOUNT_HEADS)} standard account heads.")
+        # Ensure default logins & standard Chart of Accounts exist
+        ensure_default_account_heads(db)
+        ensure_default_users(db)
+        print("  - Standard Chart of Accounts (COA) & System User Logins verified.")
 
-        print("[OK] Database reset complete! Database is now empty and ready.")
+        print("\n[OK] Database reset complete! The system is now 100% clean and ready for fresh entries.")
 
     except Exception as e:
         db.rollback()
@@ -48,4 +55,4 @@ def clear_db(seed_chart_of_accounts=True):
         db.close()
 
 if __name__ == "__main__":
-    clear_db(seed_chart_of_accounts=True)
+    clear_db()

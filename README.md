@@ -2,7 +2,7 @@
 
 # ⚡ Battery ERP — Inventory Management System
 
-### Renew Gen Resources Nepal Pvt. Ltd.
+### Renew Gen Resources
 
 A full-stack ERP system for lithium-ion battery trading, inventory management, and financial accounting.
 
@@ -392,7 +392,7 @@ clear-database.bat     → Resets database
 
 ---
 
-**Renew Gen Resources Nepal Pvt. Ltd.** © 2025
+**Renew Gen Resources** © 2025
 
 Built with ❤️ for the Nepali battery trading industry
 

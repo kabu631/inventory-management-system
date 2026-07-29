@@ -1,7 +1,10 @@
 "use client";
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api, formatNPR } from "@/lib/api";
-import { AlertTriangle, Plus, Search, TrendingUp, Package, ShoppingBag, ArrowDownLeft, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { AlertTriangle, Plus, Search, TrendingUp, Package, ShoppingBag, ArrowDownLeft, X, CheckCircle2, AlertCircle, Lock, Unlock, Eye, EyeOff } from "lucide-react";
+
+const INVENTORY_PIN = process.env.NEXT_PUBLIC_DASHBOARD_PIN ?? "1234";
 
 interface Item {
   id: number; sku: string; name: string; brand: string;
@@ -15,15 +18,88 @@ interface Customer {
   id: number; name: string; customer_type: string; phone: string;
 }
 
+interface BankLoan {
+  id: number;
+  bank_name: string;
+  loan_account_no: string;
+  principal_npr: number;
+  purpose: string;
+  is_closed: boolean;
+}
+
+interface InvestorRecord {
+  id: number;
+  name: string;
+  total_invested_npr?: number;
+  invested_amount_npr?: number;
+}
+
 export default function InventoryPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const isAccountant = user?.role === "ACCOUNTANT";
+  const canSell = isAdmin || user?.role === "STAFF";
+
+  // Privacy lock state
+  const [unlocked, setUnlocked] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
+  const [pin, setPin] = useState("");
+  const [pinError, setPinError] = useState("");
+  const [showPin, setShowPin] = useState(false);
+  const pinRef = useRef<HTMLInputElement>(null);
+
+  // Auto-focus pin input when modal opens
+  useEffect(() => {
+    if (showPinModal) {
+      setTimeout(() => pinRef.current?.focus(), 80);
+    }
+  }, [showPinModal]);
+
+  function openLockModal() {
+    if (unlocked) {
+      setUnlocked(false);
+    } else {
+      setPin("");
+      setPinError("");
+      setShowPin(false);
+      setShowPinModal(true);
+    }
+  }
+
+  function handlePinSubmit() {
+    if (pin === INVENTORY_PIN) {
+      setUnlocked(true);
+      setShowPinModal(false);
+      setPin("");
+      setPinError("");
+    } else {
+      setPinError("Incorrect password. Try again.");
+      setPin("");
+      pinRef.current?.focus();
+    }
+  }
+
+  const mask = (val: string) => (unlocked ? val : "••••••");
+  const blurStyle = {
+    filter: unlocked ? "none" : "blur(6px)",
+    userSelect: (unlocked ? "auto" : "none") as React.CSSProperties["userSelect"],
+    transition: "filter 0.3s ease",
+  };
+
   const [items, setItems] = useState<Item[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [loans, setLoans] = useState<BankLoan[]>([]);
+  const [investors, setInvestors] = useState<InvestorRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
   const [showSaleModal, setShowSaleModal] = useState(false);
   const [showPurchaseModal, setShowPurchaseModal] = useState(false);
   const [msg, setMsg] = useState({ text: "", type: "" });
+
+  // Purchase funding source states
+  const [fundingSource, setFundingSource] = useState<string>("INVESTOR");
+  const [selectedLoanId, setSelectedLoanId] = useState<number | null>(null);
 
   // Add SKU form
   const [form, setForm] = useState({
@@ -41,6 +117,8 @@ export default function InventoryPage() {
     unit_price_npr: "",
     payment_method: "CREDIT",
     invoice_date: new Date().toISOString().split("T")[0],
+    paid_amount_npr: "",
+    partial_payment_method: "BANK",
   });
   const [saleSubmitting, setSaleSubmitting] = useState(false);
 
@@ -71,9 +149,14 @@ export default function InventoryPage() {
     Promise.all([
       api.get<Item[]>("/api/inventory/"),
       api.get<Customer[]>("/api/customers/"),
-    ]).then(([i, c]) => {
+      api.get<BankLoan[]>("/api/loans/").catch(() => []),
+      api.get<any>("/api/investors/").catch(() => ({ investors: [] })),
+    ]).then(([i, c, l, invRes]) => {
       setItems(i);
       setCustomers(c);
+      setLoans(Array.isArray(l) ? l : []);
+      const invList = Array.isArray(invRes) ? invRes : (invRes?.investors || []);
+      setInvestors(invList);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -120,6 +203,8 @@ export default function InventoryPage() {
       unit_price_npr: defaultSku ? String(defaultSku.selling_price_npr) : "",
       payment_method: "CREDIT",
       invoice_date: new Date().toISOString().split("T")[0],
+      paid_amount_npr: "",
+      partial_payment_method: "BANK",
     });
     setCustomerMode("existing");
     setNewCustomer({ name: "", phone: "", email: "", address: "", customer_type: "B2C", credit_limit: "0" });
@@ -129,14 +214,31 @@ export default function InventoryPage() {
 
   const handleOpenPurchaseModal = (skuId?: number) => {
     const defaultSku = skuId ? items.find(i => i.id === skuId) : (items[0] || null);
+    const activeLoan = loans.find(l => !l.is_closed);
     setPurchaseForm({
       inventory_id: defaultSku?.id || 0,
       quantity: 10,
       unit_cost_npr: defaultSku ? String(defaultSku.import_cost_npr) : "",
-      payment_method: "BANK",
+      payment_method: activeLoan ? "LOAN" : "INVESTOR",
       purchase_date: new Date().toISOString().split("T")[0],
     });
+    if (activeLoan) {
+      setFundingSource(`LOAN_${activeLoan.id}`);
+      setSelectedLoanId(activeLoan.id);
+    } else {
+      setFundingSource("INVESTOR");
+      setSelectedLoanId(null);
+    }
     setShowPurchaseModal(true);
+  };
+
+  const handleSelectFundingSource = (val: string) => {
+    setFundingSource(val);
+    if (val.startsWith("LOAN_")) {
+      setSelectedLoanId(Number(val.replace("LOAN_", "")));
+    } else {
+      setSelectedLoanId(null);
+    }
   };
 
   const handleSelectSkuInSale = (skuId: number) => {
@@ -187,13 +289,18 @@ export default function InventoryPage() {
       }
 
       const selectedSku = items.find(i => i.id === Number(saleForm.inventory_id));
+      const enteredPaid = saleForm.paid_amount_npr !== "" ? Number(saleForm.paid_amount_npr || 0) : undefined;
+      const effectiveMethod = (enteredPaid !== undefined && enteredPaid > 0 && enteredPaid < totalSaleAmount) ? "PARTIAL" : saleForm.payment_method;
+
       const res = await api.post<{ status: string; message: string }>(
         "/api/inventory/sell",
         {
           customer_id: targetCustomerId,
-          payment_method: saleForm.payment_method,
+          payment_method: effectiveMethod,
           invoice_date: saleForm.invoice_date,
           apply_vat: applyVat,
+          paid_amount_npr: enteredPaid,
+          partial_payment_method: saleForm.partial_payment_method,
           items: [
             {
               inventory_id: Number(saleForm.inventory_id),
@@ -217,14 +324,24 @@ export default function InventoryPage() {
     if (!purchaseForm.inventory_id) return alert("Please select a battery SKU.");
     if (purchaseForm.quantity <= 0) return alert("Quantity must be greater than 0.");
 
+    let payMethod = "INVESTOR";
+    let loanId: number | null = null;
+    if (fundingSource.startsWith("LOAN_")) {
+      payMethod = "LOAN";
+      loanId = Number(fundingSource.replace("LOAN_", ""));
+    } else {
+      payMethod = fundingSource;
+    }
+
     setPurchaseSubmitting(true);
     try {
       const selectedSku = items.find(i => i.id === Number(purchaseForm.inventory_id));
       const res = await api.post<{ status: string; message: string }>(
         "/api/inventory/purchase",
         {
-          payment_method: purchaseForm.payment_method,
+          payment_method: payMethod,
           purchase_date: purchaseForm.purchase_date,
+          loan_id: loanId,
           items: [
             {
               inventory_id: Number(purchaseForm.inventory_id),
@@ -255,6 +372,32 @@ export default function InventoryPage() {
   const calcPurchaseUnitCost = purchaseForm.unit_cost_npr ? Number(purchaseForm.unit_cost_npr) : (selectedSkuForPurchase?.import_cost_npr || 0);
   const totalPurchaseAmount = calcPurchaseUnitCost * Number(purchaseForm.quantity || 0);
 
+  const totalInvestorCapital = Array.isArray(investors)
+    ? investors.reduce((sum, inv) => sum + (inv.total_invested_npr || inv.invested_amount_npr || 0), 0)
+    : 0;
+  const totalBankLoanCapital = Array.isArray(loans)
+    ? loans.filter(l => !l.is_closed).reduce((sum, l) => sum + (l.principal_npr || 0), 0)
+    : 0;
+
+  const selectedLoan = selectedLoanId ? loans.find(l => l.id === selectedLoanId) : null;
+  const selectedFundingAvailable = fundingSource === "INVESTOR"
+    ? totalInvestorCapital
+    : selectedLoan
+    ? selectedLoan.principal_npr
+    : fundingSource === "CASH"
+    ? totalInvestorCapital
+    : 999999999;
+
+  const remainingSelectedLoan = selectedLoan
+    ? selectedLoan.principal_npr - totalPurchaseAmount
+    : totalBankLoanCapital;
+
+  const remainingInvestorCapital = fundingSource === "INVESTOR"
+    ? totalInvestorCapital - totalPurchaseAmount
+    : totalInvestorCapital;
+
+  const isInsufficientFunding = totalPurchaseAmount > selectedFundingAvailable && selectedFundingAvailable > 0;
+
   const margin = (item: Item) =>
     item.selling_price_npr > 0
       ? (((item.selling_price_npr - item.import_cost_npr) / item.selling_price_npr) * 100).toFixed(1)
@@ -263,7 +406,8 @@ export default function InventoryPage() {
   const FIELDS: [string, string, string, string][] = [
     ["sku","SKU *","LFP-12-100","text"], ["name","Name *","LFP 12V 100Ah Battery","text"],
     ["brand","Brand","PowerNep","text"], ["capacity_ah","Capacity (Ah)","100","number"],
-    ["voltage_v","Voltage (V)","12","number"], ["import_cost_npr","Import Cost NPR","18000","number"],
+    ["voltage_v","Voltage (V)","12","number"],
+    ...(isAdmin ? [["import_cost_npr","Import Cost NPR","18000","number"] as [string, string, string, string]] : []),
     ["selling_price_npr","Selling Price NPR","24000","number"], ["stock_qty","Stock Qty","0","number"],
     ["reorder_level","Reorder Level","5","number"],
   ];
@@ -272,21 +416,49 @@ export default function InventoryPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="page-title">Inventory & Stock Management</h1>
+          <h1 className="page-title">{isAdmin ? "Inventory & Stock Management" : isAccountant ? "Stock Audit & Price Directory" : "Product Catalog & Sales Portal"}</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem" }}>
-            Purchase Inventory using Bank Loan Funds & Sell Battery Stock
+            {isAdmin ? "Purchase Inventory using Bank Loan Funds & Manage Stock" : isAccountant ? "Audit Remaining Stock Quantities & Customer Selling Prices" : "Check Battery Prices & Issue Customer Invoices"}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button className="btn btn-ghost" onClick={() => handleOpenPurchaseModal()} id="buy-stock-btn" style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}>
-            <ArrowDownLeft size={16} /> Purchase Stock (Bank Loan Funds)
-          </button>
-          <button className="btn btn-ghost" onClick={() => handleOpenSaleModal()} id="new-sale-btn" style={{ borderColor: "rgba(99,102,241,0.4)", color: "#818cf8" }}>
-            <ShoppingBag size={16} /> Sell Battery / Invoice
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-sku-btn">
-            <Plus size={16} /> Add SKU
-          </button>
+        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+          {isAdmin && (
+            <button
+              id="inventory-privacy-toggle"
+              onClick={openLockModal}
+              title={unlocked ? "Click to lock financial costs & margins" : "Click to reveal import costs & margins"}
+              style={{
+                display: "flex", alignItems: "center", gap: "0.5rem",
+                padding: "0.5rem 1rem",
+                borderRadius: "0.625rem",
+                border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
+                background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                color: unlocked ? "#22c55e" : "#ef4444",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.8rem",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
+              {unlocked ? "Lock Financials" : "Unlock Financials"}
+            </button>
+          )}
+          {isAdmin && (
+            <button className="btn btn-ghost" onClick={() => handleOpenPurchaseModal()} id="buy-stock-btn" style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}>
+              <ArrowDownLeft size={16} /> Purchase Stock (Bank Loan Funds)
+            </button>
+          )}
+          {canSell && (
+            <button className="btn btn-primary" onClick={() => handleOpenSaleModal()} id="new-sale-btn" style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", border: "none" }}>
+              <ShoppingBag size={16} /> Sell Battery / Create Invoice
+            </button>
+          )}
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-sku-btn">
+              <Plus size={16} /> Add SKU
+            </button>
+          )}
         </div>
       </div>
 
@@ -300,18 +472,37 @@ export default function InventoryPage() {
       {/* Summary cards */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
-          { label: "Total Inventory Value", value: formatNPR(totalValue),                        color: "#6366f1", icon: Package },
-          { label: "Total Units in Stock",  value: `${totalUnits.toLocaleString()} units`,        color: "#22c55e", icon: TrendingUp },
-          { label: "Low Stock Items",       value: `${lowStockCount} SKUs`,                       color: lowStockCount > 0 ? "#ef4444" : "#22c55e", icon: AlertTriangle },
+          isAdmin
+            ? { label: "Total Inventory Value", value: mask(formatNPR(totalValue)), isFinancial: true, color: "#6366f1", icon: Package }
+            : { label: "Total Catalog Items",   value: `${items.length} Battery SKUs`, isFinancial: false, color: "#6366f1", icon: Package },
+          { label: "Total Units in Stock",  value: `${totalUnits.toLocaleString()} units`, isFinancial: false, color: "#22c55e", icon: TrendingUp },
+          { label: "Low Stock Items",       value: `${lowStockCount} SKUs`, isFinancial: false, color: lowStockCount > 0 ? "#ef4444" : "#22c55e", icon: AlertTriangle },
         ].map(k => (
-          <div key={k.label} className="kpi-card">
+          <div key={k.label} className="kpi-card" style={{ position: "relative" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>{k.label}</p>
-                <p style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "0.375rem" }}>{k.value}</p>
+                <p style={{
+                  fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)", marginTop: "0.375rem",
+                  ...(k.isFinancial ? blurStyle : {}),
+                }}>{k.value}</p>
               </div>
               <k.icon size={20} color={k.color} style={{ opacity: 0.7 }} />
             </div>
+
+            {/* Lock overlay click hint if financial and locked */}
+            {isAdmin && k.isFinancial && !unlocked && (
+              <button
+                onClick={openLockModal}
+                style={{
+                  position: "absolute", inset: 0,
+                  background: "transparent",
+                  border: "none", cursor: "pointer",
+                  borderRadius: "inherit",
+                }}
+                title="Click to unlock import costs & margins"
+              />
+            )}
           </div>
         ))}
       </div>
@@ -357,6 +548,18 @@ export default function InventoryPage() {
 
             {/* Scrollable Body */}
             <div style={{ overflowY: "auto", padding: "1.5rem 2rem", flex: 1, display: "flex", flexDirection: "column", gap: "1rem" }}>
+              {/* Top Funding Capital & Loan Overview Bar */}
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem", padding: "0.75rem 1rem", background: "rgba(16,185,129,0.06)", border: "1px solid rgba(16,185,129,0.2)", borderRadius: "0.625rem" }}>
+                <div>
+                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em" }}>💼 Investor Equity Capital</span>
+                  <p style={{ fontSize: "1.1rem", fontWeight: 800, color: "#10b981", margin: 0 }}>{formatNPR(totalInvestorCapital)}</p>
+                </div>
+                <div>
+                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em" }}>🏦 Active Bank Loan Funds</span>
+                  <p style={{ fontSize: "1.1rem", fontWeight: 800, color: "#3b82f6", margin: 0 }}>{formatNPR(totalBankLoanCapital)}</p>
+                </div>
+              </div>
+
               {/* Product selection */}
               <div>
                 <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
@@ -405,19 +608,24 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              {/* Payment Source & Date */}
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              {/* Funding Source Selection & Purchase Date */}
+              <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem" }}>
                 <div>
                   <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
-                    Payment Source *
+                    Funding Source / Capital Account *
                   </label>
                   <select
                     className="input"
-                    value={purchaseForm.payment_method}
-                    onChange={e => setPurchaseForm(f => ({ ...f, payment_method: e.target.value }))}
-                    id="purchase-payment-select"
+                    value={fundingSource}
+                    onChange={e => handleSelectFundingSource(e.target.value)}
+                    id="purchase-funding-select"
                   >
-                    <option value="BANK">🏦 Bank Account (Paid from Bank Loan Funds)</option>
+                    <option value="INVESTOR">💼 Investor Equity Capital (Available: {formatNPR(totalInvestorCapital)})</option>
+                    {loans.filter(l => !l.is_closed).map(loan => (
+                      <option key={loan.id} value={`LOAN_${loan.id}`}>
+                        🏦 Bank Loan: {loan.bank_name} ({loan.loan_account_no}) — {formatNPR(loan.principal_npr)}
+                      </option>
+                    ))}
                     <option value="CASH">💵 Cash in Hand</option>
                     <option value="SUPPLIER_CREDIT">💳 Supplier Credit (Accounts Payable)</option>
                   </select>
@@ -436,20 +644,38 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              {/* Purchase Summary Box */}
-              <div style={{ padding: "0.875rem 1rem", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.2)", borderRadius: "0.625rem", marginTop: "0.5rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              {/* Dynamic Purchase Summary Box & Individual Remaining Balances */}
+              <div style={{ padding: "0.875rem 1rem", background: "rgba(34,197,94,0.08)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: "0.625rem", marginTop: "0.25rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "0.5rem" }}>
                   <div>
-                    <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase" }}>Total Purchase Cost</p>
-                    <p style={{ fontSize: "1.25rem", fontWeight: 700, color: "#22c55e" }}>{formatNPR(totalPurchaseAmount)}</p>
+                    <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Total Purchase Cost</p>
+                    <p style={{ fontSize: "1.3rem", fontWeight: 800, color: "#22c55e", lineHeight: 1.1 }}>{formatNPR(totalPurchaseAmount)}</p>
                   </div>
-                  <div style={{ textAlign: "right", fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                    <div>Automated Connections:</div>
-                    <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Increases Stock Qty by +{purchaseForm.quantity}</div>
-                    <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Debits Stock Asset (1004)</div>
-                    <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Credits Bank Loan Funds (1002)</div>
+                  <div style={{ textAlign: "right" }}>
+                    <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600 }}>Selected Funding Balance</p>
+                    <p style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", lineHeight: 1.1 }}>{formatNPR(selectedFundingAvailable)}</p>
                   </div>
                 </div>
+
+                {/* Remaining Balances Breakdown after purchase */}
+                <div style={{ borderTop: "1px dashed rgba(255,255,255,0.15)", paddingTop: "0.5rem", display: "flex", flexDirection: "column", gap: "0.35rem", fontSize: "0.76rem" }}>
+                  {selectedLoan && (
+                    <div style={{ display: "flex", justifyContent: "space-between", color: remainingSelectedLoan < 0 ? "#ef4444" : "#3b82f6", fontWeight: 600 }}>
+                      <span>Remaining Bank Loan ({selectedLoan.bank_name}) After Purchase:</span>
+                      <span>{formatNPR(remainingSelectedLoan)}</span>
+                    </div>
+                  )}
+                  <div style={{ display: "flex", justifyContent: "space-between", color: remainingInvestorCapital < 0 ? "#ef4444" : "#10b981", fontWeight: 600 }}>
+                    <span>Remaining Investor Equity Capital After Purchase:</span>
+                    <span>{formatNPR(remainingInvestorCapital)}</span>
+                  </div>
+                </div>
+
+                {isInsufficientFunding && (
+                  <div style={{ marginTop: "0.5rem", padding: "0.4rem 0.6rem", background: "rgba(239,68,68,0.15)", border: "1px solid rgba(239,68,68,0.4)", borderRadius: "0.375rem", color: "#ef4444", fontSize: "0.72rem", fontWeight: 700 }}>
+                    ⚠️ Warning: Purchase amount ({formatNPR(totalPurchaseAmount)}) exceeds selected available funding balance ({formatNPR(selectedFundingAvailable)}).
+                  </div>
+                )}
               </div>
             </div>
 
@@ -672,12 +898,20 @@ export default function InventoryPage() {
                   <select
                     className="input"
                     value={saleForm.payment_method}
-                    onChange={e => setSaleForm(f => ({ ...f, payment_method: e.target.value }))}
+                    onChange={e => {
+                      const val = e.target.value;
+                      setSaleForm(f => ({
+                        ...f,
+                        payment_method: val,
+                        paid_amount_npr: val === "CREDIT" ? "0" : val === "PARTIAL" ? f.paid_amount_npr : ""
+                      }));
+                    }}
                     id="sale-payment-select"
                   >
-                    <option value="CREDIT">💳 CREDIT (Add to Customer Receivable)</option>
-                    <option value="CASH">💵 CASH (Immediate Cash in Hand)</option>
-                    <option value="BANK">🏦 BANK (Direct Bank Transfer)</option>
+                    <option value="CREDIT">💳 CREDIT (Full Amount Saved to Customer Due)</option>
+                    <option value="PARTIAL">⚡ PARTIAL PAYMENT (Down Payment + Remaining Credit)</option>
+                    <option value="CASH">💵 CASH (Full Immediate Cash in Hand)</option>
+                    <option value="BANK">🏦 BANK (Full Direct Bank Deposit)</option>
                   </select>
                 </div>
 
@@ -694,36 +928,124 @@ export default function InventoryPage() {
                 </div>
               </div>
 
-              {/* Enhanced Total Box with VAT Breakdown */}
-              <div style={{ padding: "0.875rem 1rem", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "0.625rem", marginTop: "0.25rem" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div style={{ display: "flex", flexDirection: "column", gap: "0.2rem" }}>
-                    <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em" }}>
-                      Total Invoice Calculation
-                    </p>
-                    <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                      Subtotal ({saleForm.quantity} x {formatNPR(calcSaleUnitPrice)}): <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{formatNPR(saleSubtotal)}</span>
-                    </div>
-                    {applyVat && (
-                      <div style={{ fontSize: "0.78rem", color: "#818cf8", fontWeight: 500 }}>
-                        + 13% VAT: <span style={{ fontWeight: 700 }}>{formatNPR(saleVatAmount)}</span>
-                        <span style={{ fontSize: "0.7rem", opacity: 0.8, marginLeft: "4px" }}>({formatNPR(unitPriceWithVat)} / unit incl. VAT)</span>
-                      </div>
-                    )}
-                    <div style={{ marginTop: "0.35rem" }}>
-                      <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase" }}>TOTAL AMOUNT</p>
-                      <p style={{ fontSize: "1.35rem", fontWeight: 800, color: "#818cf8", lineHeight: 1.1 }}>{formatNPR(totalSaleAmount)}</p>
-                    </div>
+              {/* Upfront Down Payment & Split Section (ALWAYS VISIBLE & INTUITIVE) */}
+              <div style={{ padding: "0.875rem 1rem", background: "rgba(34,197,94,0.06)", border: "1px solid rgba(34,197,94,0.25)", borderRadius: "0.625rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: "0.75rem", fontWeight: 700, color: "#22c55e", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    ⚡ Partial Down Payment &amp; Upfront Collection
                   </div>
+                  <span style={{ fontSize: "0.68rem", color: "var(--text-muted)", fontWeight: 600 }}>
+                    {saleForm.payment_method === "PARTIAL" || (Number(saleForm.paid_amount_npr || 0) > 0 && Number(saleForm.paid_amount_npr || 0) < totalSaleAmount)
+                      ? "⚡ Partial Split Active"
+                      : "Settlement Mode"}
+                  </span>
+                </div>
 
-                  <div style={{ textAlign: "right", fontSize: "0.72rem", color: "var(--text-muted)" }}>
-                    <div style={{ fontWeight: 600, marginBottom: "0.2rem" }}>Automated Actions:</div>
-                    <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Decrements Stock by {saleForm.quantity}</div>
-                    <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Auto-posts Journal Entry</div>
-                    {applyVat && <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Credits 13% VAT Payable</div>}
-                    <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Auto-syncs to Google Drive</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1.2fr 0.8fr", gap: "0.75rem" }}>
+                  <div>
+                    <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.25rem", fontWeight: 600 }}>
+                      Amount Paid Upfront by Customer (NPR)
+                    </label>
+                    <input
+                      type="number"
+                      className="input"
+                      placeholder="e.g. 20000 (Enter amount paid now)"
+                      value={saleForm.paid_amount_npr}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setSaleForm(f => ({
+                          ...f,
+                          paid_amount_npr: val,
+                          payment_method: (Number(val) > 0 && Number(val) < totalSaleAmount) ? "PARTIAL" : f.payment_method
+                        }));
+                      }}
+                      id="sale-paid-amount-input"
+                    />
+                  </div>
+                  <div>
+                    <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.25rem", fontWeight: 600 }}>
+                      Upfront Account
+                    </label>
+                    <select
+                      className="input"
+                      value={saleForm.partial_payment_method}
+                      onChange={e => setSaleForm(f => ({ ...f, partial_payment_method: e.target.value }))}
+                      id="sale-partial-method-select"
+                    >
+                      <option value="BANK">🏦 Bank Deposit</option>
+                      <option value="CASH">💵 Cash in Hand</option>
+                    </select>
                   </div>
                 </div>
+              </div>
+
+              {/* Enhanced Total Box with Live Partial Payment Breakdown */}
+              <div style={{ padding: "0.875rem 1rem", background: "rgba(99,102,241,0.08)", border: "1px solid rgba(99,102,241,0.25)", borderRadius: "0.625rem", marginTop: "0.25rem" }}>
+                {(() => {
+                  let paidVal = 0;
+                  if (saleForm.paid_amount_npr !== "") {
+                    paidVal = Math.min(Math.max(0, Number(saleForm.paid_amount_npr || 0)), totalSaleAmount);
+                  } else if (saleForm.payment_method === "CASH" || saleForm.payment_method === "BANK") {
+                    paidVal = totalSaleAmount;
+                  } else {
+                    paidVal = 0;
+                  }
+
+                  const remainingDueVal = totalSaleAmount - paidVal;
+                  const isPartialActive = paidVal > 0 && remainingDueVal > 0;
+
+                  return (
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", flex: 1 }}>
+                        <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", fontWeight: 600, letterSpacing: "0.04em", margin: 0 }}>
+                          Total Invoice Calculation
+                        </p>
+                        <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
+                          Subtotal ({saleForm.quantity} x {formatNPR(calcSaleUnitPrice)}): <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{formatNPR(saleSubtotal)}</span>
+                        </div>
+                        {applyVat && (
+                          <div style={{ fontSize: "0.78rem", color: "#818cf8", fontWeight: 500 }}>
+                            + 13% VAT: <span style={{ fontWeight: 700 }}>{formatNPR(saleVatAmount)}</span>
+                            <span style={{ fontSize: "0.7rem", opacity: 0.8, marginLeft: "4px" }}>({formatNPR(unitPriceWithVat)} / unit incl. VAT)</span>
+                          </div>
+                        )}
+                        <div style={{ marginTop: "0.25rem" }}>
+                          <p style={{ fontSize: "0.68rem", color: "var(--text-muted)", textTransform: "uppercase", margin: 0 }}>GRAND TOTAL BILL</p>
+                          <p style={{ fontSize: "1.3rem", fontWeight: 800, color: "#818cf8", margin: 0, lineHeight: 1.1 }}>{formatNPR(totalSaleAmount)}</p>
+                        </div>
+
+                        {/* Partial Payment Summary Cards */}
+                        {isPartialActive && (
+                          <div style={{ marginTop: "0.5rem", padding: "0.6rem 0.75rem", background: "rgba(255,255,255,0.04)", borderRadius: "0.5rem", border: "1px solid var(--border)", display: "flex", flexDirection: "column", gap: "0.3rem", fontSize: "0.78rem" }}>
+                            <div style={{ display: "flex", justifyContent: "space-between", color: "#22c55e", fontWeight: 700 }}>
+                              <span>💵 Received Upfront ({saleForm.partial_payment_method}):</span>
+                              <span>{formatNPR(paidVal)}</span>
+                            </div>
+                            <div style={{ display: "flex", justifyContent: "space-between", color: "#f59e0b", fontWeight: 700 }}>
+                              <span>💳 Remaining Customer Due (Accounts Receivable):</span>
+                              <span>{formatNPR(remainingDueVal)}</span>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ textAlign: "right", fontSize: "0.72rem", color: "var(--text-muted)", marginLeft: "1rem" }}>
+                        <div style={{ fontWeight: 600, marginBottom: "0.2rem" }}>Automated Ledger Actions:</div>
+                        <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Decrements Stock by {saleForm.quantity}</div>
+                        {isPartialActive ? (
+                          <>
+                            <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Debits {saleForm.partial_payment_method}: {formatNPR(paidVal)}</div>
+                            <div style={{ color: "#f59e0b", fontWeight: 500 }}>✓ Debits Customer AR: {formatNPR(remainingDueVal)}</div>
+                          </>
+                        ) : (
+                          <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Auto-posts Journal Entry</div>
+                        )}
+                        {applyVat && <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Credits 13% VAT Payable</div>}
+                        <div style={{ color: "#22c55e", fontWeight: 500 }}>✓ Auto-syncs to Google Drive</div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
 
@@ -754,11 +1076,11 @@ export default function InventoryPage() {
             <thead>
               <tr>
                 <th>SKU</th><th>Name</th><th>Brand</th><th>Spec</th>
-                <th style={{ textAlign: "right" }}>Import Cost</th>
-                <th style={{ textAlign: "right" }}>Sell Price</th>
-                <th style={{ textAlign: "right" }}>Margin</th>
+                {isAdmin && <th style={{ textAlign: "right" }}>Import Cost</th>}
+                <th style={{ textAlign: "right" }}>Selling Price</th>
+                {isAdmin && <th style={{ textAlign: "right" }}>Margin</th>}
                 <th style={{ textAlign: "center" }}>Stock</th>
-                <th style={{ textAlign: "right" }}>Value</th>
+                {isAdmin && <th style={{ textAlign: "right" }}>Value</th>}
                 <th>Status</th>
                 <th style={{ textAlign: "center" }}>Actions</th>
               </tr>
@@ -770,13 +1092,25 @@ export default function InventoryPage() {
                   <td style={{ fontWeight: 500 }}>{item.name}</td>
                   <td className="text-muted">{item.brand}</td>
                   <td className="text-faint" style={{ fontSize: "0.8rem" }}>{item.voltage_v}V / {item.capacity_ah}Ah</td>
-                  <td style={{ textAlign: "right" }} className="text-muted">{formatNPR(item.import_cost_npr)}</td>
-                  <td style={{ textAlign: "right" }}>{formatNPR(item.selling_price_npr)}</td>
-                  <td style={{ textAlign: "right", color: "#22c55e", fontWeight: 600 }}>{margin(item)}%</td>
+                  {isAdmin && (
+                    <td style={{ textAlign: "right", ...blurStyle }} className="text-muted">
+                      {mask(formatNPR(item.import_cost_npr))}
+                    </td>
+                  )}
+                  <td style={{ textAlign: "right", fontWeight: 700, color: "var(--text-primary)" }}>{formatNPR(item.selling_price_npr)}</td>
+                  {isAdmin && (
+                    <td style={{ textAlign: "right", color: "#22c55e", fontWeight: 600, ...blurStyle }}>
+                      {mask(`${margin(item)}%`)}
+                    </td>
+                  )}
                   <td style={{ textAlign: "center", fontWeight: 700, color: item.low_stock ? "#ef4444" : "var(--text-primary)" }}>
                     {item.stock_qty}
                   </td>
-                  <td style={{ textAlign: "right", color: "#818cf8", fontWeight: 600 }}>{formatNPR(item.inventory_value_npr)}</td>
+                  {isAdmin && (
+                    <td style={{ textAlign: "right", color: "#818cf8", fontWeight: 600, ...blurStyle }}>
+                      {mask(formatNPR(item.inventory_value_npr))}
+                    </td>
+                  )}
                   <td>
                     {item.low_stock
                       ? <span className="badge badge-red"><AlertTriangle size={10} style={{ marginRight: 3 }} />Low</span>
@@ -785,23 +1119,30 @@ export default function InventoryPage() {
                   </td>
                   <td style={{ textAlign: "center" }}>
                     <div style={{ display: "flex", gap: "0.375rem", justifyContent: "center" }}>
-                      <button
-                        className="btn btn-ghost"
-                        style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", color: "#22c55e", borderColor: "rgba(34,197,94,0.3)" }}
-                        onClick={() => handleOpenPurchaseModal(item.id)}
-                        id={`buy-btn-${item.id}`}
-                      >
-                        <ArrowDownLeft size={12} style={{ marginRight: 3 }} /> Buy
-                      </button>
-                      <button
-                        className="btn btn-ghost"
-                        style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", color: "#818cf8", borderColor: "rgba(99,102,241,0.3)" }}
-                        onClick={() => handleOpenSaleModal(item.id)}
-                        disabled={item.stock_qty <= 0}
-                        id={`sell-btn-${item.id}`}
-                      >
-                        <ShoppingBag size={12} style={{ marginRight: 3 }} /> Sell
-                      </button>
+                      {isAdmin && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", color: "#22c55e", borderColor: "rgba(34,197,94,0.3)" }}
+                          onClick={() => handleOpenPurchaseModal(item.id)}
+                          id={`buy-btn-${item.id}`}
+                        >
+                          <ArrowDownLeft size={12} style={{ marginRight: 3 }} /> Buy
+                        </button>
+                      )}
+                      {canSell && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", color: "#818cf8", borderColor: "rgba(99,102,241,0.3)" }}
+                          onClick={() => handleOpenSaleModal(item.id)}
+                          disabled={item.stock_qty <= 0}
+                          id={`sell-btn-${item.id}`}
+                        >
+                          <ShoppingBag size={12} style={{ marginRight: 3 }} /> Sell
+                        </button>
+                      )}
+                      {isAccountant && (
+                        <span className="badge badge-amber" style={{ fontSize: "0.7rem" }}>AUDIT READ-ONLY</span>
+                      )}
                     </div>
                   </td>
                 </tr>
@@ -810,6 +1151,63 @@ export default function InventoryPage() {
           </table>
         )}
       </div>
+
+      {/* PIN Unlock Modal */}
+      {showPinModal && (
+        <div className="modal-overlay" onClick={() => setShowPinModal(false)}>
+          <div
+            className="card"
+            style={{
+              width: "380px", maxWidth: "90vw", padding: "2rem",
+              display: "flex", flexDirection: "column", alignItems: "center", gap: "1.25rem",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "center", width: "56px", height: "56px", borderRadius: "50%", background: "rgba(239,68,68,0.1)", border: "1px solid rgba(239,68,68,0.25)" }}>
+              <Lock size={24} color="#ef4444" />
+            </div>
+            <div style={{ textAlign: "center" }}>
+              <h3 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                Unlock Cost &amp; Profit Margins
+              </h3>
+              <p style={{ fontSize: "0.78rem", color: "var(--text-muted)", marginTop: "0.375rem" }}>
+                Enter admin password to reveal import cost &amp; margin percentages
+              </p>
+            </div>
+
+            <div style={{ width: "100%", position: "relative" }}>
+              <input
+                ref={pinRef}
+                type={showPin ? "text" : "password"}
+                className="input"
+                style={{ width: "100%", textAlign: "center", fontSize: "1.1rem", letterSpacing: "0.15em", paddingRight: "2.5rem" }}
+                placeholder="Enter password"
+                value={pin}
+                onChange={(e) => { setPin(e.target.value); setPinError(""); }}
+                onKeyDown={(e) => { if (e.key === "Enter") handlePinSubmit(); }}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPin(!showPin)}
+                style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}
+              >
+                {showPin ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
+
+            {pinError && (
+              <p style={{ color: "#ef4444", fontSize: "0.78rem", fontWeight: 600, margin: 0 }}>{pinError}</p>
+            )}
+
+            <div style={{ display: "flex", gap: "0.75rem", width: "100%" }}>
+              <button className="btn btn-ghost" style={{ flex: 1 }} onClick={() => setShowPinModal(false)}>Cancel</button>
+              <button className="btn btn-primary" style={{ flex: 1 }} onClick={handlePinSubmit}>
+                <Unlock size={14} /> Unlock
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

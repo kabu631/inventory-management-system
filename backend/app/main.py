@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.services.backup import trigger_auto_backup
-from app.routers import inventory, customers, journal, loans, analytics, backup, warehouses, serials, suppliers
+from app.routers import inventory, customers, journal, loans, analytics, backup, warehouses, serials, suppliers, auth, investors
 
 
 async def periodic_backup_task(interval_seconds: int = 1800):
@@ -24,8 +24,19 @@ async def periodic_backup_task(interval_seconds: int = 1800):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables & seed if empty
+    # Startup: create tables & seed default users / investors if empty
+    from app.database import SessionLocal
+    from app.routers.auth import ensure_default_users
+    from app.routers.investors import ensure_default_investors
+    from app.routers.journal import ensure_default_account_heads
     init_db()
+    db = SessionLocal()
+    try:
+        ensure_default_account_heads(db)
+        ensure_default_users(db)
+        ensure_default_investors(db)
+    finally:
+        db.close()
     # Trigger an immediate startup backup to Google Drive
     trigger_auto_backup()
     # Start 30-minute background backup loop (1800 seconds)
@@ -36,9 +47,9 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Battery ERP API",
-    description="Corporate Battery Inventory & Supply Chain ERP with 30-Min Google Drive Auto-Backup",
-    version="2.1.0",
+    title="Renew Gen Resources ERP API",
+    description="Corporate Inventory & Supply Chain ERP for Renew Gen Resources",
+    version="2.2.0",
     lifespan=lifespan,
 )
 
@@ -51,6 +62,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(investors.router, prefix="/api/investors", tags=["Investors & Capital"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])
 app.include_router(journal.router, prefix="/api/journal", tags=["Journal"])

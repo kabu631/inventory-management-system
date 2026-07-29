@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { ShieldCheck, Plus, CheckCircle2, AlertCircle, ShieldAlert, Barcode } from "lucide-react";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 interface Serial {
   id: number; serial_number: string; sku: string; item_name: string; warehouse: string; purchase_date: string; warranty_months: number; warranty_expiry_date: string; status: string; customer_name: string; sale_invoice_ref: string; is_expired: boolean;
 }
@@ -14,6 +16,9 @@ interface InventorySKU {
 }
 
 export default function WarrantyPage() {
+  const { user } = useAuth();
+  const canManageWarranty = user?.role === "ADMIN" || user?.role === "STAFF";
+
   const [serials, setSerials] = useState<Serial[]>([]);
   const [claims, setClaims] = useState<Claim[]>([]);
   const [items, setItems] = useState<InventorySKU[]>([]);
@@ -101,14 +106,16 @@ export default function WarrantyPage() {
           <h1 className="page-title">Battery Serial & Warranty Management</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem" }}>Individual Battery Unit Tracking, Warranty Expiry & Defective Claim Processing</p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button className="btn btn-ghost" onClick={() => setShowClaimModal(true)} style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}>
-            <ShieldAlert size={16} /> Submit Warranty Claim
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowRegModal(true)}>
-            <Barcode size={16} /> Register Battery Serials
-          </button>
-        </div>
+        {canManageWarranty && (
+          <div style={{ display: "flex", gap: "0.75rem" }}>
+            <button className="btn btn-ghost" onClick={() => setShowClaimModal(true)} style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}>
+              <ShieldAlert size={16} /> Submit Warranty Claim
+            </button>
+            <button className="btn btn-primary" onClick={() => setShowRegModal(true)}>
+              <Barcode size={16} /> Register Battery Serials
+            </button>
+          </div>
+        )}
       </div>
 
       {msg.text && (

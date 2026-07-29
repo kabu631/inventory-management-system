@@ -391,23 +391,37 @@ html, body {
 .light .alert-success { color: #15803d; }
 .light .alert-error   { color: #dc2626; }
 
-/* ============================================================
-   MODAL OVERLAY
-   ============================================================ */
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.55);
-  backdrop-filter: blur(4px);
+  background: rgba(15, 23, 42, 0.75);
+  backdrop-filter: blur(6px);
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
   z-index: 100;
   overflow-y: auto;
   padding: 1.5rem 1rem;
 }
 .light .modal-overlay {
-  background: rgba(15,23,42,0.40);
+  background: rgba(15, 23, 42, 0.50);
+}
+
+.modal {
+  background: #0f172a !important;
+  border: 1px solid rgba(255, 255, 255, 0.15) !important;
+  border-radius: 1rem;
+  padding: 1.75rem;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8) !important;
+  width: 100%;
+  backdrop-filter: none !important;
+  color: #f8fafc;
+}
+.light .modal {
+  background: #ffffff !important;
+  border: 1px solid #cbd5e1 !important;
+  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.25) !important;
+  color: #0f172a;
 }
 
 /* ============================================================

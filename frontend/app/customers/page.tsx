@@ -4,6 +4,8 @@ import { api, formatNPR, formatDate } from "@/lib/api";
 import { Users, Search, Plus, FileText, X, ArrowRight, UserCheck, CreditCard } from "lucide-react";
 import Link from "next/link";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 interface Customer {
   id: number; name: string; phone: string; email: string; address?: string;
   customer_type: "B2B" | "B2C"; credit_limit: number;
@@ -34,6 +36,9 @@ interface CustomerLedgerData {
 }
 
 export default function CustomersPage() {
+  const { user } = useAuth();
+  const canManageCustomers = user?.role === "ADMIN" || user?.role === "STAFF";
+
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -114,9 +119,11 @@ export default function CustomersPage() {
           <h1 className="page-title">Customers</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem" }}>B2B &amp; B2C customer ledgers and transaction history</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-customer-btn">
-          <Plus size={16} /> Add Customer
-        </button>
+        {canManageCustomers && (
+          <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-customer-btn">
+            <Plus size={16} /> Add Customer
+          </button>
+        )}
       </div>
 
       {/* Stats */}

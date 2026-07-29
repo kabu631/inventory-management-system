@@ -3,6 +3,8 @@ import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { Building2, Plus, ArrowRightLeft, CheckCircle2, AlertCircle, MapPin, Package } from "lucide-react";
 
+import { useAuth } from "@/contexts/AuthContext";
+
 interface Warehouse {
   id: number; code: string; name: string; location: string; is_primary: boolean;
 }
@@ -14,6 +16,10 @@ interface InventorySKU {
 }
 
 export default function WarehousesPage() {
+  const { user } = useAuth();
+  const isAdmin = user?.role === "ADMIN";
+  const canTransfer = isAdmin || user?.role === "STAFF";
+
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [transfers, setTransfers] = useState<Transfer[]>([]);
   const [items, setItems] = useState<InventorySKU[]>([]);
@@ -94,12 +100,16 @@ export default function WarehousesPage() {
           <p className="text-muted" style={{ fontSize: "0.875rem" }}>Corporate Location Tracking, Central Depots & Inter-Warehouse Stock Movements</p>
         </div>
         <div style={{ display: "flex", gap: "0.75rem" }}>
-          <button className="btn btn-ghost" onClick={() => setShowTrfModal(true)} style={{ borderColor: "rgba(99,102,241,0.4)", color: "#818cf8" }}>
-            <ArrowRightLeft size={16} /> New Stock Transfer
-          </button>
-          <button className="btn btn-primary" onClick={() => setShowAddWh(true)}>
-            <Plus size={16} /> Add Location
-          </button>
+          {canTransfer && (
+            <button className="btn btn-ghost" onClick={() => setShowTrfModal(true)} style={{ borderColor: "rgba(99,102,241,0.4)", color: "#818cf8" }}>
+              <ArrowRightLeft size={16} /> New Stock Transfer
+            </button>
+          )}
+          {isAdmin && (
+            <button className="btn btn-primary" onClick={() => setShowAddWh(true)}>
+              <Plus size={16} /> Add Location
+            </button>
+          )}
         </div>
       </div>
 

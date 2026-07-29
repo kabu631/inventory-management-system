@@ -7,6 +7,22 @@ from app.database import Base
 
 
 # ---------------------------------------------------------------------------
+# System Users & Authentication
+# ---------------------------------------------------------------------------
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    salt = Column(String(64), nullable=False)
+    role = Column(String(20), nullable=False, default="STAFF")  # ADMIN | STAFF
+    full_name = Column(String(100), nullable=False)
+    staff_id = Column(String(50), nullable=False)
+    created_at = Column(DateTime, server_default=func.now())
+
+
+# ---------------------------------------------------------------------------
 # Multi-Warehouse & Locations
 # ---------------------------------------------------------------------------
 class Warehouse(Base):
@@ -250,3 +266,37 @@ class LoanRepayment(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     loan = relationship("BankLoan", back_populates="repayments")
+
+
+# ---------------------------------------------------------------------------
+# Company Investors & Equity Capital
+# ---------------------------------------------------------------------------
+class Investor(Base):
+    __tablename__ = "investors"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(200), nullable=False)
+    phone = Column(String(30))
+    email = Column(String(150))
+    address = Column(Text)
+    ownership_pct = Column(Float, default=0.0)
+    notes = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+
+    investments = relationship("InvestmentRecord", back_populates="investor", cascade="all, delete-orphan")
+
+
+class InvestmentRecord(Base):
+    __tablename__ = "investment_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    investor_id = Column(Integer, ForeignKey("investors.id"), nullable=False)
+    amount_npr = Column(Float, nullable=False)
+    investment_date = Column(Date, nullable=False)
+    payment_method = Column(String(50), default="BANK")  # BANK | CASH | CHEQUE
+    reference = Column(String(100))
+    journal_entry_id = Column(Integer, ForeignKey("journal_entries.id"), nullable=True)
+    notes = Column(Text)
+    created_at = Column(DateTime, server_default=func.now())
+
+    investor = relationship("Investor", back_populates="investments")

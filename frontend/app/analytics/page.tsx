@@ -5,7 +5,9 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
   Legend, ResponsiveContainer, Area, AreaChart,
 } from "recharts";
-import { TrendingUp, TrendingDown, Eye, EyeOff, Lock, Unlock, X, ShieldCheck } from "lucide-react";
+import Link from "next/link";
+import { useAuth } from "@/contexts/AuthContext";
+import { TrendingUp, TrendingDown, Eye, EyeOff, Lock, Unlock, X, ShieldCheck, ShieldAlert } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 
 const DASHBOARD_PIN = process.env.NEXT_PUBLIC_DASHBOARD_PIN ?? "1234";
@@ -28,25 +30,27 @@ const NPR = (v: number) => `Rs.${(v / 1000).toFixed(0)}k`;
 
 function makeTooltip(isDark: boolean, unlocked: boolean) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return function CustomTooltip(props: any) {
-    const { active, payload, label } = props;
-    if (!active || !payload?.length) return null;
+  return function CustomTooltip({ active, payload, label }: any) {
+    if (!active || !payload || !payload.length) return null;
     return (
       <div style={{
-        background: isDark ? "rgba(17,24,39,0.97)" : "rgba(255,255,255,0.97)",
-        border: `1px solid ${isDark ? "rgba(99,102,241,0.3)" : "rgba(99,102,241,0.2)"}`,
-        borderRadius: "0.625rem",
-        padding: "0.75rem 1rem",
-        fontSize: "0.8rem",
-        color: isDark ? "#f9fafb" : "#0f172a",
-        boxShadow: "0 8px 32px rgba(0,0,0,0.15)",
+        background: isDark ? "#0f172a" : "#ffffff",
+        border: `1px solid ${isDark ? "rgba(255,255,255,0.15)" : "#e2e8f0"}`,
+        borderRadius: "0.5rem",
+        padding: "0.5rem 0.75rem",
+        fontSize: "0.75rem",
+        color: isDark ? "#f8fafc" : "#0f172a",
+        boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
       }}>
-        <p style={{ fontWeight: 700, marginBottom: "0.375rem" }}>{String(label)}</p>
-        {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
-        {payload.map((p: any, i: number) => (
-          <p key={i} style={{ color: String(p.color), marginTop: "2px" }}>
-            {String(p.name)}: <strong>{unlocked ? formatNPR(Number(p.value)) : "••••••"}</strong>
-          </p>
+        <p style={{ fontWeight: 700, marginBottom: "4px" }}>{label}</p>
+        {payload.map((p: any) => (
+          <div key={p.name} style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <span style={{ width: "8px", height: "8px", borderRadius: "50%", background: p.color }} />
+            <span>{p.name}:</span>
+            <span style={{ fontWeight: 600, filter: unlocked ? "none" : "blur(4px)" }}>
+              {unlocked ? formatNPR(p.value) : "••••••"}
+            </span>
+          </div>
         ))}
       </div>
     );
@@ -54,7 +58,24 @@ function makeTooltip(isDark: boolean, unlocked: boolean) {
 }
 
 export default function AnalyticsPage() {
+  const { user } = useAuth();
   const { theme } = useTheme();
+  
+  if (user && user.role !== "ADMIN") {
+    return (
+      <div style={{ padding: "4rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Investor Access Required</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
+          Financial profit margins, revenue forecasting, and ML analytics are restricted strictly to company administrators and investors.
+        </p>
+        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
+      </div>
+    );
+  }
+
   const isDark = theme === "dark";
 
   const [analytics, setAnalytics] = useState<Analytics | null>(null);

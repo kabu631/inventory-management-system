@@ -1,5 +1,5 @@
 @echo off
-title Renew Gen Resources Nepal — Clear Database
+title Renew Gen Resources — Clear Database
 echo [Renew Gen ERP] Clearing all data from SQLite database...
 set PYTHONPATH=C:\Users\kabin\OneDrive\Desktop\erp\Lib\site-packages
 cd /d "%~dp0backend"

@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback } from "react";
 import Link from "next/link";
 import { api, formatNPR, formatDate } from "@/lib/api";
-import { Plus, Search, X, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Printer } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
+import { Plus, Search, X, CheckCircle2, AlertCircle, Download, FileSpreadsheet, Printer, ShieldAlert } from "lucide-react";
 
 interface Account { id: number; code: string; name: string; account_type?: string; }
 interface JournalLine { account_id: number; debit_npr: number; credit_npr: number; description: string; }
@@ -15,6 +16,21 @@ interface JournalEntry {
 const EMPTY_LINE = (): JournalLine => ({ account_id: 0, debit_npr: 0, credit_npr: 0, description: "" });
 
 export default function JournalPage() {
+  const { user } = useAuth();
+  if (user && user.role !== "ADMIN" && user.role !== "ACCOUNTANT") {
+    return (
+      <div style={{ padding: "4rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Accountant Access Required</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
+          Financial journal entries, double-entry ledgers, and tax compliance records are restricted to administrators and company accountants.
+        </p>
+        <Link href="/inventory" className="btn btn-primary">Go to Product Catalog &amp; Stock</Link>
+      </div>
+    );
+  }
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [loading, setLoading] = useState(true);
