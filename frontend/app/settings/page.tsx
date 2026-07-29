@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState, useCallback } from "react";
-import { api } from "@/lib/api";
+import { api, getAuthToken } from "@/lib/api";
 import Link from "next/link";
 import { useAuth } from "@/contexts/AuthContext";
 import {
@@ -105,7 +105,7 @@ export default function SettingsPage() {
     formData.append("file", selectedFile);
 
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const token = getAuthToken();
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/backup/restore-file`, {
         method: "POST",
         headers: {
@@ -127,7 +127,7 @@ export default function SettingsPage() {
 
   const handleDownloadBackup = async () => {
     try {
-      const token = typeof window !== "undefined" ? localStorage.getItem("token") : null;
+      const token = getAuthToken();
       const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000"}/api/backup/download`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
