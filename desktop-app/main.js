@@ -73,7 +73,7 @@ async function createWindow() {
     height: 900,
     minWidth: 1024,
     minHeight: 600,
-    title: "Battery ERP — Nepal",
+    title: "ONIN Infosys ERP — Nepal",
     backgroundColor: "#030712",
     show: false,
     webPreferences: {

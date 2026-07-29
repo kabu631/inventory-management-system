@@ -8,7 +8,8 @@ db_files = [
     os.path.join(BASE_DIR, "erp.db"),
     os.path.join(BASE_DIR, "erp.db-wal"),
     os.path.join(BASE_DIR, "erp.db-shm"),
-    r"G:\My Drive\BatteryERP_Backups\erp_latest.db"
+    os.path.join(BASE_DIR, "backups", "erp_latest.db"),
+    r"G:\My Drive\ONIN_ERP_Backups\erp_latest.db"
 ]
 
 for f in db_files:

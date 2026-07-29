@@ -1,5 +1,5 @@
 """
-Seed script: generates 12 months of realistic data for the Battery ERP.
+Seed script: generates 12 months of realistic data for ONIN Infosys ERP.
 Run once: python -m app.seed
 """
 import os
@@ -13,32 +13,37 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from app.database import SessionLocal, init_db
 from app.models import (
     Customer, Inventory, AccountHead, JournalEntry,
-    JournalLine, BankLoan, LoanRepayment,
+    JournalLine, BankLoan, LoanRepayment, User,
 )
+from app.services.auth import hash_password
 
 random.seed(42)
 
 # ---------------------------------------------------------------------------
-# Reference data
+# Reference data — ONIN Infosys (Laptops, PC Components & Accessories)
 # ---------------------------------------------------------------------------
 BATTERY_SKUS = [
-    {"sku": "LFP-12-100", "name": "LFP 12V 100Ah Battery", "brand": "PowerNep", "capacity_ah": 100, "voltage_v": 12, "import_cost_npr": 18000, "selling_price_npr": 24000},
-    {"sku": "LFP-24-100", "name": "LFP 24V 100Ah Battery", "brand": "PowerNep", "capacity_ah": 100, "voltage_v": 24, "import_cost_npr": 35000, "selling_price_npr": 46000},
-    {"sku": "LFP-48-50",  "name": "LFP 48V 50Ah Battery",  "brand": "VoltEdge", "capacity_ah": 50,  "voltage_v": 48, "import_cost_npr": 28000, "selling_price_npr": 38000},
-    {"sku": "LFP-48-100", "name": "LFP 48V 100Ah Battery", "brand": "VoltEdge", "capacity_ah": 100, "voltage_v": 48, "import_cost_npr": 52000, "selling_price_npr": 68000},
-    {"sku": "NMC-12-60",  "name": "NMC 12V 60Ah Battery",  "brand": "SunStore", "capacity_ah": 60,  "voltage_v": 12, "import_cost_npr": 12000, "selling_price_npr": 16500},
-    {"sku": "NMC-24-60",  "name": "NMC 24V 60Ah Battery",  "brand": "SunStore", "capacity_ah": 60,  "voltage_v": 24, "import_cost_npr": 22000, "selling_price_npr": 29000},
-    {"sku": "LFP-72-50",  "name": "LFP 72V 50Ah E-Bike",   "brand": "EcoRide",  "capacity_ah": 50,  "voltage_v": 72, "import_cost_npr": 32000, "selling_price_npr": 44000},
-    {"sku": "LFP-72-30",  "name": "LFP 72V 30Ah E-Bike",   "brand": "EcoRide",  "capacity_ah": 30,  "voltage_v": 72, "import_cost_npr": 21000, "selling_price_npr": 29000},
-    {"sku": "LFP-12-200", "name": "LFP 12V 200Ah Deep Cycle","brand": "SolarMax","capacity_ah": 200, "voltage_v": 12, "import_cost_npr": 34000, "selling_price_npr": 46000},
-    {"sku": "LFP-48-200", "name": "LFP 48V 200Ah Solar",    "brand": "SolarMax", "capacity_ah": 200, "voltage_v": 48, "import_cost_npr": 98000, "selling_price_npr": 130000},
+    {"sku": "MAC-M3P-14",   "name": 'MacBook Pro 14" M3 Pro 18GB/512GB', "brand": "Apple",     "capacity_ah": 18, "voltage_v": 14, "import_cost_npr": 265000, "selling_price_npr": 295000, "warranty_months": 12},
+    {"sku": "DELL-XPS-15",  "name": "Dell XPS 15 9530 i7-13700H 16GB/1TB RTX 4060", "brand": "Dell", "capacity_ah": 16, "voltage_v": 15, "import_cost_npr": 245000, "selling_price_npr": 275000, "warranty_months": 12},
+    {"sku": "HP-VIC-15",    "name": "HP Victus 15 Ryzen 5 7535HS 16GB/512GB RTX 2050", "brand": "HP", "capacity_ah": 16, "voltage_v": 15, "import_cost_npr": 82000, "selling_price_npr": 94000, "warranty_months": 12},
+    {"sku": "ASUS-ROG-G16", "name": "ASUS ROG Strix G16 i7-13650HX 16GB/1TB RTX 4060", "brand": "ASUS", "capacity_ah": 16, "voltage_v": 16, "import_cost_npr": 210000, "selling_price_npr": 235000, "warranty_months": 24},
+    {"sku": "LEN-LEG-5P",   "name": "Lenovo Legion 5 Pro Ryzen 7 7745HX 16GB/1TB RTX 4070", "brand": "Lenovo", "capacity_ah": 16, "voltage_v": 16, "import_cost_npr": 220000, "selling_price_npr": 248000, "warranty_months": 24},
+    {"sku": "ACER-HEL-16",  "name": "Acer Predator Helios 16 i7-13700HX 16GB/1TB RTX 4070", "brand": "Acer", "capacity_ah": 16, "voltage_v": 16, "import_cost_npr": 215000, "selling_price_npr": 240000, "warranty_months": 12},
+    {"sku": "CPU-INTEL-I9", "name": "Intel Core i9-14900K Desktop Processor", "brand": "Intel", "capacity_ah": 0, "voltage_v": 0, "import_cost_npr": 75000, "selling_price_npr": 86000, "warranty_months": 36},
+    {"sku": "GPU-RTX-4080S","name": "NVIDIA GeForce RTX 4080 Super 16GB Graphics Card", "brand": "NVIDIA", "capacity_ah": 16, "voltage_v": 0, "import_cost_npr": 155000, "selling_price_npr": 175000, "warranty_months": 36},
+    {"sku": "SSD-SAM-990",  "name": "Samsung 990 PRO 2TB PCIe 4.0 NVMe SSD", "brand": "Samsung", "capacity_ah": 0, "voltage_v": 0, "import_cost_npr": 24000, "selling_price_npr": 29500, "warranty_months": 60},
+    {"sku": "RAM-COR-32G",  "name": "Corsair Vengeance 32GB (2x16GB) DDR5 6000MHz RAM", "brand": "Corsair", "capacity_ah": 32, "voltage_v": 0, "import_cost_npr": 16500, "selling_price_npr": 20500, "warranty_months": 36},
+    {"sku": "MON-ASUS-27",  "name": 'ASUS TUF Gaming 27" 180Hz IPS Gaming Monitor', "brand": "ASUS", "capacity_ah": 0, "voltage_v": 27, "import_cost_npr": 28000, "selling_price_npr": 34500, "warranty_months": 24},
+    {"sku": "MS-LOGI-MX3S", "name": "Logitech MX Master 3S Wireless Performance Mouse", "brand": "Logitech", "capacity_ah": 0, "voltage_v": 0, "import_cost_npr": 12500, "selling_price_npr": 15500, "warranty_months": 12},
+    {"sku": "KB-RAZ-BLK4",  "name": "Razer BlackWidow V4 RGB Mechanical Keyboard", "brand": "Razer", "capacity_ah": 0, "voltage_v": 0, "import_cost_npr": 19000, "selling_price_npr": 23500, "warranty_months": 12},
+    {"sku": "HS-STEEL-N7",  "name": "SteelSeries Arctis Nova 7 Wireless Gaming Headset", "brand": "SteelSeries", "capacity_ah": 0, "voltage_v": 0, "import_cost_npr": 22000, "selling_price_npr": 27000, "warranty_months": 12},
 ]
 
 CUSTOMER_NAMES_B2B = [
-    "Himalayan Solar Pvt. Ltd.", "Kathmandu EV Hub", "Pokhara Power Solutions",
-    "Green Energy Nepal", "Everest Electronics", "Boudha Battery House",
-    "Lalitpur Solar Depot", "Bhaktapur EcoStore", "Chitwan Power Hub",
-    "Birgunj Trade Center", "Butwal Solar & EV",
+    "WorldLink Communications Pvt. Ltd.", "Nepal Telecom (NTC)", "InfoTech Solutions Nepal",
+    "TechHub Nepal Pvt. Ltd.", "Kathmandu IT Systems", "Everest Cybernetics",
+    "Pokhara Digital Media", "Lalitpur Software Labs", "Bhaktapur Tech Center",
+    "Birgunj Enterprise IT", "Butwal Infotech House",
 ]
 CUSTOMER_NAMES_B2C = [
     "Ram Bahadur Thapa", "Sita Devi Sharma", "Hari Prasad Adhikari",
@@ -51,11 +56,11 @@ CUSTOMER_NAMES_B2C = [
 ]
 
 BANK_LOANS_DATA = [
-    {"bank_name": "Nepal Bank Limited",         "loan_account_no": "NBL-2024-001", "principal_npr": 2000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 1, 15), "due_date": date(2026, 1, 15), "purpose": "Working capital for battery import"},
-    {"bank_name": "Rastriya Banijya Bank",      "loan_account_no": "RBB-2024-042", "principal_npr": 3500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 3, 1),  "due_date": date(2026, 3, 1),  "purpose": "Warehouse expansion"},
-    {"bank_name": "Nabil Bank",                 "loan_account_no": "NABIL-24-789", "principal_npr": 1500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 6, 10), "due_date": date(2025, 12, 10),"purpose": "E-bike battery stock import"},
-    {"bank_name": "NIC Asia Bank",              "loan_account_no": "NICA-2024-33",  "principal_npr": 5000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 7, 20), "due_date": date(2027, 7, 20), "purpose": "Capital equipment purchase"},
-    {"bank_name": "Himalayan Bank",             "loan_account_no": "HBL-2025-007", "principal_npr": 2500000, "annual_interest_rate": 10.0, "disbursement_date": date(2025, 1, 5),  "due_date": date(2027, 1, 5),  "purpose": "Solar battery bulk import"},
+    {"bank_name": "Nepal Bank Limited",         "loan_account_no": "NBL-2024-001", "principal_npr": 2000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 1, 15), "due_date": date(2026, 1, 15), "purpose": "Working capital for laptop & component import"},
+    {"bank_name": "Rastriya Banijya Bank",      "loan_account_no": "RBB-2024-042", "principal_npr": 3500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 3, 1),  "due_date": date(2026, 3, 1),  "purpose": "Pako, New Road flagship store expansion"},
+    {"bank_name": "Nabil Bank",                 "loan_account_no": "NABIL-24-789", "principal_npr": 1500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 6, 10), "due_date": date(2025, 12, 10),"purpose": "Gaming PC inventory stock financing"},
+    {"bank_name": "NIC Asia Bank",              "loan_account_no": "NICA-2024-33",  "principal_npr": 5000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 7, 20), "due_date": date(2027, 7, 20), "purpose": "Corporate IT hardware import line"},
+    {"bank_name": "Himalayan Bank",             "loan_account_no": "HBL-2025-007", "principal_npr": 2500000, "annual_interest_rate": 10.0, "disbursement_date": date(2025, 1, 5),  "due_date": date(2027, 1, 5),  "purpose": "Apple & ASUS bulk inventory import"},
 ]
 
 ACCOUNT_HEADS = [
@@ -96,7 +101,28 @@ def seed():
 
         print("Seeding database...")
 
-        # 1. Account Heads
+        # 0. User Accounts (Admin & Staff)
+        if db.query(User).count() == 0:
+            admin_user = User(
+                username="onininfosys",
+                email="admin@onin.com.np",
+                full_name="System Administrator",
+                hashed_password=hash_password("P@shupat1nath"),
+                role="ADMIN",
+                is_active=True,
+            )
+            staff_user = User(
+                username="staff",
+                email="staff@onin.com.np",
+                full_name="Onin Staff Member",
+                hashed_password=hash_password("staff123"),
+                role="STAFF",
+                is_active=True,
+            )
+            db.add(admin_user)
+            db.add(staff_user)
+            db.flush()
+            print("  Created default user accounts (onininfosys / P@shupat1nath, staff / staff123)")
         acc_map = {}
         for ah in ACCOUNT_HEADS:
             obj = AccountHead(**ah)
@@ -213,7 +239,7 @@ def seed():
                 imp_entry = JournalEntry(
                     entry_date=imp_date,
                     reference=f"IMP-{month_base.strftime('%Y%m')}-{random.randint(100, 999)}",
-                    narration=f"Import of {qty}x {sku_obj.name} from India",
+                    narration=f"Import of {qty}x {sku_obj.name} from Authorized Distributor",
                 )
                 imp_entry.lines = [
                     JournalLine(account_id=acc_map["1004"].id, debit_npr=total_cost + freight, credit_npr=0, description="Stock received"),

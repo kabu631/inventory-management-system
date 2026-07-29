@@ -60,3 +60,60 @@ def init_db():
     except Exception as e:
         print(f"[Migration Info] Auto column check: {e}")
 
+    # Ensure default admin and staff users exist & Account Heads exist
+    try:
+        db = SessionLocal()
+        from app.models import User, AccountHead
+        if db.query(AccountHead).count() == 0:
+            heads = [
+                {"code": "1001", "name": "Cash in Hand",            "account_type": "ASSET",     "normal_balance": "DEBIT"},
+                {"code": "1002", "name": "Bank Account - NBL",      "account_type": "ASSET",     "normal_balance": "DEBIT"},
+                {"code": "1003", "name": "Accounts Receivable",     "account_type": "ASSET",     "normal_balance": "DEBIT"},
+                {"code": "1004", "name": "Inventory / Stock",       "account_type": "ASSET",     "normal_balance": "DEBIT"},
+                {"code": "1005", "name": "Prepaid Expenses",        "account_type": "ASSET",     "normal_balance": "DEBIT"},
+                {"code": "2001", "name": "Accounts Payable",        "account_type": "LIABILITY", "normal_balance": "CREDIT"},
+                {"code": "2002", "name": "Bank Loan Payable",       "account_type": "LIABILITY", "normal_balance": "CREDIT"},
+                {"code": "2003", "name": "Interest Payable",        "account_type": "LIABILITY", "normal_balance": "CREDIT"},
+                {"code": "2004", "name": "VAT Payable",             "account_type": "LIABILITY", "normal_balance": "CREDIT"},
+                {"code": "3001", "name": "Owner's Equity",          "account_type": "EQUITY",    "normal_balance": "CREDIT"},
+                {"code": "3002", "name": "Retained Earnings",       "account_type": "EQUITY",    "normal_balance": "CREDIT"},
+                {"code": "4001", "name": "Sales Revenue",           "account_type": "INCOME",    "normal_balance": "CREDIT"},
+                {"code": "4002", "name": "Other Income",            "account_type": "INCOME",    "normal_balance": "CREDIT"},
+                {"code": "5001", "name": "Cost of Goods Sold",      "account_type": "EXPENSE",   "normal_balance": "DEBIT"},
+                {"code": "5002", "name": "Interest Expense",        "account_type": "EXPENSE",   "normal_balance": "DEBIT"},
+                {"code": "5003", "name": "Freight & Import Charges","account_type": "EXPENSE",   "normal_balance": "DEBIT"},
+                {"code": "5004", "name": "Salary Expense",          "account_type": "EXPENSE",   "normal_balance": "DEBIT"},
+                {"code": "5005", "name": "Rent Expense",            "account_type": "EXPENSE",   "normal_balance": "DEBIT"},
+                {"code": "5006", "name": "Utilities Expense",       "account_type": "EXPENSE",   "normal_balance": "DEBIT"},
+            ]
+            for h in heads:
+                db.add(AccountHead(**h))
+            db.commit()
+            print(f"[Init DB] Initialized {len(heads)} Chart of Accounts (Account Heads)")
+
+        if db.query(User).count() == 0:
+            from app.services.auth import hash_password
+            admin_user = User(
+                username="onininfosys",
+                email="admin@onin.com.np",
+                full_name="System Administrator",
+                hashed_password=hash_password("P@shupat1nath"),
+                role="ADMIN",
+                is_active=True,
+            )
+            staff_user = User(
+                username="staff",
+                email="staff@onin.com.np",
+                full_name="Onin Staff Member",
+                hashed_password=hash_password("staff123"),
+                role="STAFF",
+                is_active=True,
+            )
+            db.add(admin_user)
+            db.add(staff_user)
+            db.commit()
+            print("[Init DB] Created default users: onininfosys / P@shupat1nath (ADMIN) and staff / staff123 (STAFF)")
+        db.close()
+    except Exception as e:
+        print(f"[Init DB Info] Initialization check: {e}")
+

@@ -79,7 +79,7 @@ export default function WarehousesPage() {
   const handleCreateTransfer = async () => {
     if (!trfForm.from_warehouse_id || !trfForm.to_warehouse_id) return alert("Select source and destination warehouses");
     if (trfForm.from_warehouse_id === trfForm.to_warehouse_id) return alert("Source and destination cannot be identical");
-    if (!trfForm.inventory_id) return alert("Select battery SKU to transfer");
+    if (!trfForm.inventory_id) return alert("Select product SKU to transfer");
     if (trfForm.quantity <= 0) return alert("Quantity must be at least 1");
 
     setSubmitting(true);
@@ -189,7 +189,7 @@ export default function WarehousesPage() {
               </div>
 
               <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Select Battery SKU *</label>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Select Product SKU *</label>
                 <select className="input" value={trfForm.inventory_id} onChange={e => setTrfForm(f => ({ ...f, inventory_id: Number(e.target.value) }))}>
                   {items.map(i => <option key={i.id} value={i.id}>{i.sku} — {i.name} (Stock: {i.stock_qty})</option>)}
                 </select>

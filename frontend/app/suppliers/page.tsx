@@ -71,7 +71,7 @@ export default function SuppliersPage() {
 
   const handleCreatePo = async () => {
     if (!poForm.supplier_id) return alert("Please select a supplier");
-    if (!poForm.inventory_id) return alert("Please select a battery SKU");
+    if (!poForm.inventory_id) return alert("Please select a product SKU");
     if (poForm.quantity <= 0) return alert("Quantity must be at least 1");
 
     setSubmitting(true);
@@ -134,19 +134,19 @@ export default function SuppliersPage() {
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
             <div>
               <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Supplier Name *</label>
-              <input type="text" className="input" placeholder="CATL / Contemporary Amperex Tech" value={supForm.name} onChange={e => setSupForm(f => ({ ...f, name: e.target.value }))} />
+              <input type="text" className="input" placeholder="Neoteric Nepal / Nagmani International" value={supForm.name} onChange={e => setSupForm(f => ({ ...f, name: e.target.value }))} />
             </div>
             <div>
               <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Contact Person</label>
-              <input type="text" className="input" placeholder="Mr. Chen / Sales Director" value={supForm.contact_person} onChange={e => setSupForm(f => ({ ...f, contact_person: e.target.value }))} />
+              <input type="text" className="input" placeholder="Sales Manager" value={supForm.contact_person} onChange={e => setSupForm(f => ({ ...f, contact_person: e.target.value }))} />
             </div>
             <div>
               <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Phone Number</label>
-              <input type="text" className="input" placeholder="+977 9801XXXXXX" value={supForm.phone} onChange={e => setSupForm(f => ({ ...f, phone: e.target.value }))} />
+              <input type="text" className="input" placeholder="+977 01-4400000" value={supForm.phone} onChange={e => setSupForm(f => ({ ...f, phone: e.target.value }))} />
             </div>
             <div>
               <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Email Address</label>
-              <input type="email" className="input" placeholder="sales@catl.com" value={supForm.email} onChange={e => setSupForm(f => ({ ...f, email: e.target.value }))} />
+              <input type="email" className="input" placeholder="sales@neoteric.com.np" value={supForm.email} onChange={e => setSupForm(f => ({ ...f, email: e.target.value }))} />
             </div>
             <div>
               <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>PAN / VAT Number</label>
@@ -154,7 +154,7 @@ export default function SuppliersPage() {
             </div>
             <div>
               <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Office Address</label>
-              <input type="text" className="input" placeholder="Guangdong, China / Kathmandu" value={supForm.address} onChange={e => setSupForm(f => ({ ...f, address: e.target.value }))} />
+              <input type="text" className="input" placeholder="Kathmandu, Nepal" value={supForm.address} onChange={e => setSupForm(f => ({ ...f, address: e.target.value }))} />
             </div>
           </div>
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
@@ -182,7 +182,7 @@ export default function SuppliersPage() {
               </div>
 
               <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Select Battery SKU *</label>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>Select Product SKU *</label>
                 <select className="input" value={poForm.inventory_id} onChange={e => setPoForm(f => ({ ...f, inventory_id: Number(e.target.value) }))}>
                   {items.map(i => <option key={i.id} value={i.id}>{i.sku} — {i.name} (Current Stock: {i.stock_qty})</option>)}
                 </select>

@@ -2,7 +2,7 @@
 Backup & Disaster Recovery API Router
 Handles manual backups, downloads, cloud sync directory info, and database restore uploads.
 """
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Depends
 from fastapi.responses import FileResponse
 import os
 import shutil
@@ -12,8 +12,9 @@ from app.services.backup import (
     BASE_BACKUP_DIR, ensure_backup_dir
 )
 from app.database import DB_PATH
+from app.services.auth import require_roles
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN"]))])
 
 
 @router.get("/list")
@@ -43,7 +44,7 @@ def download_backup():
         latest_file = DB_PATH
     return FileResponse(
         path=latest_file,
-        filename=f"battery_erp_backup_{os.path.basename(latest_file)}",
+        filename="onin_erp_backup.db",
         media_type="application/x-sqlite3",
     )
 
