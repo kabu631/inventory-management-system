@@ -51,9 +51,23 @@ export default function DashboardPage() {
       api.get<{ kpis: KPIs; monthly: MonthRow[] }>("/api/analytics/"),
       api.get<JournalEntry[]>("/api/journal/?limit=8"),
     ]).then(([analytics, journal]) => {
-      setKpis(analytics.kpis);
-      setMonthly(analytics.monthly.slice(-6));
-      setRecent(journal);
+      if (analytics && analytics.kpis) {
+        setKpis(analytics.kpis);
+      }
+      if (analytics && Array.isArray(analytics.monthly)) {
+        setMonthly(analytics.monthly.slice(-6));
+      } else {
+        setMonthly([]);
+      }
+      if (Array.isArray(journal)) {
+        setRecent(journal);
+      } else {
+        setRecent([]);
+      }
+    }).catch(err => {
+      console.warn("Dashboard data load error:", err);
+      setMonthly([]);
+      setRecent([]);
     }).finally(() => setLoading(false));
   }, []);
 

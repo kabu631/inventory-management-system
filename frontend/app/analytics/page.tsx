@@ -134,7 +134,8 @@ export default function AnalyticsPage() {
     return <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "60vh" }}><div className="spinner" /></div>;
   }
 
-  const { kpis, monthly } = analytics!;
+  const kpis = analytics?.kpis || { total_revenue_npr: 0, total_cogs_npr: 0, total_gross_profit_npr: 0, inventory_value_npr: 0, active_loans: 0, total_loan_principal_npr: 0 };
+  const monthly = analytics?.monthly || [];
   const slope = forecast?.model?.slope ?? 0;
 
   const combinedChartData = [
