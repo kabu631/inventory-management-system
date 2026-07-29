@@ -83,6 +83,8 @@ class LoginRequest(BaseModel):
     password: str
 
 
+from app.services.auth import create_access_token
+
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
     ensure_default_users(db)
@@ -100,13 +102,13 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             detail="Invalid username or password",
         )
 
-    # Simple session token generation
-    session_token = secrets.token_hex(24)
+    # HMAC signed JWT access token for RBAC & Session Auth
+    token = create_access_token(user.id, user.username, user.role)
 
     return {
         "status": "success",
         "message": f"Welcome back, {user.full_name}!",
-        "token": f"rg_session_{user.id}_{session_token}",
+        "token": token,
         "user": {
             "id": user.id,
             "username": user.username,
