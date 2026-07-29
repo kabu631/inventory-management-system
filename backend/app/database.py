@@ -94,25 +94,23 @@ def init_db():
         if db.query(User).count() == 0:
             from app.services.auth import hash_password
             admin_user = User(
-                username="onininfosys",
-                email="admin@onin.com.np",
-                full_name="System Administrator",
-                hashed_password=hash_password("P@shupat1nath"),
+                username="renewgenadmin",
+                email="admin@renewgen.com.np",
+                full_name="Renew Gen Administrator",
+                hashed_password=hash_password("P@shupat1n@th"),
                 role="ADMIN",
-                is_active=True,
             )
             staff_user = User(
                 username="staff",
-                email="staff@onin.com.np",
-                full_name="Onin Staff Member",
+                email="staff@renewgen.com.np",
+                full_name="Renew Gen Staff Member",
                 hashed_password=hash_password("staff123"),
                 role="STAFF",
-                is_active=True,
             )
             db.add(admin_user)
             db.add(staff_user)
             db.commit()
-            print("[Init DB] Created default users: onininfosys / P@shupat1nath (ADMIN) and staff / staff123 (STAFF)")
+            print("[Init DB] Verified default users: renewgenadmin (ADMIN) and staff (STAFF)")
         db.close()
     except Exception as e:
         print(f"[Init DB Info] Initialization check: {e}")

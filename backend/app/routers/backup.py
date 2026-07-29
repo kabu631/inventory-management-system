@@ -44,7 +44,7 @@ def download_backup():
         latest_file = DB_PATH
     return FileResponse(
         path=latest_file,
-        filename="onin_erp_backup.db",
+        filename="renewgen_erp_backup.db",
         media_type="application/x-sqlite3",
     )
 

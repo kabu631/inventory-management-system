@@ -9,7 +9,7 @@ db_files = [
     os.path.join(BASE_DIR, "erp.db-wal"),
     os.path.join(BASE_DIR, "erp.db-shm"),
     os.path.join(BASE_DIR, "backups", "erp_latest.db"),
-    r"G:\My Drive\ONIN_ERP_Backups\erp_latest.db"
+    r"G:\My Drive\RENEWGEN_ERP_Backups\erp_latest.db"
 ]
 
 for f in db_files:

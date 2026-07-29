@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models import User
 
-SECRET_KEY = os.getenv("ERP_SECRET_KEY", "onin_infosys_erp_secret_key_nepal_2026")
+SECRET_KEY = os.getenv("ERP_SECRET_KEY", "renewgen_resources_erp_secret_key_nepal_2026")
 TOKEN_EXPIRE_SECONDS = 86400 * 7  # 7 days
 
 security = HTTPBearer(auto_error=False)

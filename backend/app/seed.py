@@ -1,5 +1,5 @@
 """
-Seed script: generates 12 months of realistic data for ONIN Infosys ERP.
+Seed script: generates 12 months of realistic data for Renew Gen Resources ERP.
 Run once: python -m app.seed
 """
 import os
@@ -20,7 +20,7 @@ from app.services.auth import hash_password
 random.seed(42)
 
 # ---------------------------------------------------------------------------
-# Reference data — ONIN Infosys (Laptops, PC Components & Accessories)
+# Reference data — Renew Gen Resources (Batteries, Solar Components & Accessories)
 # ---------------------------------------------------------------------------
 BATTERY_SKUS = [
     {"sku": "MAC-M3P-14",   "name": 'MacBook Pro 14" M3 Pro 18GB/512GB', "brand": "Apple",     "capacity_ah": 18, "voltage_v": 14, "import_cost_npr": 265000, "selling_price_npr": 295000, "warranty_months": 12},
@@ -56,11 +56,11 @@ CUSTOMER_NAMES_B2C = [
 ]
 
 BANK_LOANS_DATA = [
-    {"bank_name": "Nepal Bank Limited",         "loan_account_no": "NBL-2024-001", "principal_npr": 2000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 1, 15), "due_date": date(2026, 1, 15), "purpose": "Working capital for laptop & component import"},
-    {"bank_name": "Rastriya Banijya Bank",      "loan_account_no": "RBB-2024-042", "principal_npr": 3500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 3, 1),  "due_date": date(2026, 3, 1),  "purpose": "Pako, New Road flagship store expansion"},
-    {"bank_name": "Nabil Bank",                 "loan_account_no": "NABIL-24-789", "principal_npr": 1500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 6, 10), "due_date": date(2025, 12, 10),"purpose": "Gaming PC inventory stock financing"},
-    {"bank_name": "NIC Asia Bank",              "loan_account_no": "NICA-2024-33",  "principal_npr": 5000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 7, 20), "due_date": date(2027, 7, 20), "purpose": "Corporate IT hardware import line"},
-    {"bank_name": "Himalayan Bank",             "loan_account_no": "HBL-2025-007", "principal_npr": 2500000, "annual_interest_rate": 10.0, "disbursement_date": date(2025, 1, 5),  "due_date": date(2027, 1, 5),  "purpose": "Apple & ASUS bulk inventory import"},
+    {"bank_name": "Nepal Bank Limited",         "loan_account_no": "NBL-2024-001", "principal_npr": 2000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 1, 15), "due_date": date(2026, 1, 15), "purpose": "Working capital for battery & solar component import"},
+    {"bank_name": "Rastriya Banijya Bank",      "loan_account_no": "RBB-2024-042", "principal_npr": 3500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 3, 1),  "due_date": date(2026, 3, 1),  "purpose": "New Road flagship warehouse expansion"},
+    {"bank_name": "Nabil Bank",                 "loan_account_no": "NABIL-24-789", "principal_npr": 1500000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 6, 10), "due_date": date(2025, 12, 10),"purpose": "Lithium battery inventory stock financing"},
+    {"bank_name": "NIC Asia Bank",              "loan_account_no": "NICA-2024-33",  "principal_npr": 5000000, "annual_interest_rate": 10.0, "disbursement_date": date(2024, 7, 20), "due_date": date(2027, 7, 20), "purpose": "Corporate hardware import line"},
+    {"bank_name": "Himalayan Bank",             "loan_account_no": "HBL-2025-007", "principal_npr": 2500000, "annual_interest_rate": 10.0, "disbursement_date": date(2025, 1, 5),  "due_date": date(2027, 1, 5),  "purpose": "Bulk battery inventory import"},
 ]
 
 ACCOUNT_HEADS = [
@@ -104,25 +104,23 @@ def seed():
         # 0. User Accounts (Admin & Staff)
         if db.query(User).count() == 0:
             admin_user = User(
-                username="onininfosys",
-                email="admin@onin.com.np",
-                full_name="System Administrator",
-                hashed_password=hash_password("P@shupat1nath"),
+                username="renewgenadmin",
+                email="admin@renewgen.com.np",
+                full_name="Renew Gen Administrator",
+                hashed_password=hash_password("P@shupat1n@th"),
                 role="ADMIN",
-                is_active=True,
             )
             staff_user = User(
                 username="staff",
-                email="staff@onin.com.np",
-                full_name="Onin Staff Member",
+                email="staff@renewgen.com.np",
+                full_name="Renew Gen Staff Member",
                 hashed_password=hash_password("staff123"),
                 role="STAFF",
-                is_active=True,
             )
             db.add(admin_user)
             db.add(staff_user)
             db.flush()
-            print("  Created default user accounts (onininfosys / P@shupat1nath, staff / staff123)")
+            print("  Created default user accounts (renewgenadmin / P@shupat1n@th, staff / staff123)")
         acc_map = {}
         for ah in ACCOUNT_HEADS:
             obj = AccountHead(**ah)

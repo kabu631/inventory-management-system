@@ -141,7 +141,7 @@ export default function SettingsPage() {
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `onin_erp_backup_${new Date().toISOString().split("T")[0]}.db`;
+      a.download = `renewgen_erp_backup_${new Date().toISOString().split("T")[0]}.db`;
       document.body.appendChild(a);
       a.click();
       window.URL.revokeObjectURL(url);
@@ -196,7 +196,7 @@ export default function SettingsPage() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <p style={{ fontSize: "0.72rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Google Drive Cloud Sync</p>
-              <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#818cf8", marginTop: "0.375rem", fontFamily: "monospace" }}>G:\My Drive\ONIN_ERP_Backups</p>
+              <p style={{ fontSize: "0.95rem", fontWeight: 700, color: "#818cf8", marginTop: "0.375rem", fontFamily: "monospace" }}>G:\My Drive\RENEWGEN_ERP_Backups</p>
               <p style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "2px" }}>Synced continuously every 30 mins</p>
             </div>
             <Cloud size={28} color="#818cf8" />
