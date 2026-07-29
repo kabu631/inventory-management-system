@@ -18,6 +18,15 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
     });
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
+      if (res.status === 401 && typeof window !== "undefined") {
+        sessionStorage.removeItem("rg_erp_user");
+        sessionStorage.removeItem("rg_erp_token");
+        localStorage.removeItem("rg_erp_user");
+        localStorage.removeItem("rg_erp_token");
+        if (!window.location.pathname.includes("/login")) {
+          window.location.href = "/login";
+        }
+      }
       throw new Error(err.detail || `HTTP ${res.status}`);
     }
     return await res.json();

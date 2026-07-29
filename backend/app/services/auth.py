@@ -111,11 +111,11 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = db.query(User).filter(User.id == payload.get("sub"), User.is_active == True).first()
+    user = db.query(User).filter(User.id == payload.get("sub")).first()
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="User account no longer active",
+            detail="User account no longer found",
         )
     return user
 
