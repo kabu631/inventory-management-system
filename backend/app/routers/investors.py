@@ -6,8 +6,9 @@ from typing import Optional, List
 
 from app.database import get_db
 from app.models import Investor, InvestmentRecord, JournalEntry, JournalLine, AccountHead
+from app.services.auth import require_roles
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN"]))])
 
 
 class InvestorCreate(BaseModel):

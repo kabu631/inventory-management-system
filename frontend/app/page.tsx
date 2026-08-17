@@ -4,7 +4,7 @@ import Link from "next/link";
 import { api, formatNPR } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
 import {
-  TrendingUp, Package, Landmark, BookOpen, ArrowUpRight,
+  TrendingUp, Package, Landmark, BookOpen, ArrowUpRight, ArrowDownLeft,
   Truck, ShoppingBag, ArrowRightLeft, ShieldAlert, FileSpreadsheet,
   Eye, EyeOff, Lock, Unlock, X, ShieldCheck, Users, Building2
 } from "lucide-react";
@@ -146,60 +146,69 @@ export default function DashboardPage() {
     },
   ] : [];
 
-  const QUICK_ACTIONS = [
-    ...(isAdmin ? [{ title: "Receive Stock", desc: "Buy stock from Supplier / Vendor", href: "/suppliers", icon: Truck, color: "#22c55e" }] : []),
-    { title: "Sell Battery", desc: "Create invoice & deduct stock", href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
-    { title: "Stock Transfer", desc: "Move stock between depots", href: "/warehouses", icon: ArrowRightLeft, color: "#3b82f6" },
-    { title: "Warranty Claim", desc: "Register serial or process claim", href: "/warranty", icon: ShieldAlert, color: "#ef4444" },
-    ...(isAdmin ? [{ title: "Tax CSV Export", desc: "Export journal for IRD tax audit", href: "/journal", icon: FileSpreadsheet, color: "#f59e0b" }] : []),
-  ];
+  const QUICK_ACTIONS = isAccountant
+    ? [
+        { title: "Stock Audit & Prices", desc: "Audit remaining stock & price directory", href: "/inventory", icon: Package, color: "#818cf8" },
+        { title: "Tax Clearance Export", desc: "Download IRD tax clearance CSV report", href: "/journal", icon: FileSpreadsheet, color: "#22c55e" },
+        { title: "Customer Ledgers", desc: "Audit customer credit limits & receivables", href: "/customers", icon: Users, color: "#3b82f6" },
+        { title: "Daily Journal", desc: "Review double-entry accounting ledger", href: "/journal", icon: BookOpen, color: "#f59e0b" },
+      ]
+    : [
+        { title: "Sell Battery", desc: "Create invoice & deduct stock", href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
+        { title: "Purchase Stock", desc: "Buy stock from suppliers / loans", href: "/inventory", icon: ArrowDownLeft, color: "#22c55e" },
+        { title: "Add New SKU", desc: "Register new battery specifications", href: "/inventory", icon: Package, color: "#3b82f6" },
+        { title: "Data Backup & Sync", desc: "Manual backup & Google Drive sync", href: "/settings", icon: ShieldCheck, color: "#10b981" },
+        { title: "Warranty Claim", desc: "Register serial or process claim", href: "/warranty", icon: ShieldAlert, color: "#ef4444" },
+      ];
 
   return (
     <div>
       {/* Header */}
       <div className="page-header">
-        <div>
+        <div className="page-header-info">
           <h1 className="page-title">{isAdmin ? "Corporate Inventory Dashboard" : isAccountant ? "Accountant Audit & Compliance Portal" : "Staff Operations & Sales Portal"}</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
             Renew Gen Resources ERP — {isAdmin ? "Live Overview & Quick Operations Hub" : isAccountant ? `Welcome, ${user?.full_name || "Accountant"} (${user?.staff_id || "ACC-001"})` : `Welcome, ${user?.full_name || "Staff"} (${user?.staff_id || "EMP-102"})`}
           </p>
         </div>
 
-        {/* Privacy toggle button (Admin only) */}
-        {isAdmin ? (
-          <button
-            id="privacy-toggle-btn"
-            onClick={openLockModal}
-            title={unlocked ? "Click to lock financial data" : "Click to reveal financial data"}
-            style={{
-              display: "flex", alignItems: "center", gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              borderRadius: "0.625rem",
-              border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
-              background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
-              color: unlocked ? "#22c55e" : "#ef4444",
-              cursor: "pointer",
-              fontWeight: 600,
-              fontSize: "0.8rem",
-              transition: "all 0.2s ease",
-            }}
-          >
-            {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
-            {unlocked ? "Lock Financials" : "Unlock Financials"}
-          </button>
-        ) : isAccountant ? (
-          <div style={{ padding: "0.375rem 0.875rem", borderRadius: "0.5rem", background: "rgba(245, 158, 11, 0.1)", border: "1px solid rgba(245, 158, 11, 0.25)", color: "#f59e0b", fontSize: "0.78rem", fontWeight: 700 }}>
-            📊 Accountant Audit Mode
-          </div>
-        ) : (
-          <div style={{ padding: "0.375rem 0.875rem", borderRadius: "0.5rem", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.25)", color: "#818cf8", fontSize: "0.78rem", fontWeight: 700 }}>
-            🛡️ Staff Access Mode
-          </div>
-        )}
+        <div className="page-actions">
+          {/* Privacy toggle button (Admin only) */}
+          {isAdmin ? (
+            <button
+              id="privacy-toggle-btn"
+              onClick={openLockModal}
+              title={unlocked ? "Click to lock financial data" : "Click to reveal financial data"}
+              style={{
+                display: "flex", alignItems: "center", gap: "0.4rem",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "0.5rem",
+                border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
+                background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
+                color: unlocked ? "#22c55e" : "#ef4444",
+                cursor: "pointer",
+                fontWeight: 600,
+                fontSize: "0.8125rem",
+                transition: "all 0.2s ease",
+              }}
+            >
+              {unlocked ? <Unlock size={14} /> : <Lock size={14} />}
+              {unlocked ? "Lock Financials" : "Unlock Financials"}
+            </button>
+          ) : isAccountant ? (
+            <div style={{ padding: "0.35rem 0.75rem", borderRadius: "0.5rem", background: "rgba(245, 158, 11, 0.1)", border: "1px solid rgba(245, 158, 11, 0.25)", color: "#f59e0b", fontSize: "0.75rem", fontWeight: 700 }}>
+              📊 Accountant Audit Mode
+            </div>
+          ) : (
+            <div style={{ padding: "0.35rem 0.75rem", borderRadius: "0.5rem", background: "rgba(99, 102, 241, 0.1)", border: "1px solid rgba(99, 102, 241, 0.25)", color: "#818cf8", fontSize: "0.75rem", fontWeight: 700 }}>
+              🛡️ Staff Access Mode
+            </div>
+          )}
+        </div>
       </div>
 
       {/* KPI Cards / Operational Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1.25rem", marginBottom: "2rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
         {isAdmin ? (
           kpiCards.map((k) => (
             <div key={k.label} className={`kpi-card ${k.glowClass}`} style={{ position: "relative" }}>

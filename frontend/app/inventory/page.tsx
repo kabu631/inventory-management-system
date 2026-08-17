@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api, formatNPR } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
-import { AlertTriangle, Plus, Search, TrendingUp, Package, ShoppingBag, ArrowDownLeft, X, CheckCircle2, AlertCircle, Lock, Unlock, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, Plus, Search, TrendingUp, Package, ShoppingBag, ArrowDownLeft, X, CheckCircle2, AlertCircle, Lock, Unlock, Eye, EyeOff, Pencil } from "lucide-react";
 
 const INVENTORY_PIN = process.env.NEXT_PUBLIC_DASHBOARD_PIN ?? "1234";
 
@@ -11,6 +11,7 @@ interface Item {
   capacity_ah: number; voltage_v: number;
   import_cost_npr: number; selling_price_npr: number;
   stock_qty: number; reorder_level: number;
+  hs_code?: string;
   inventory_value_npr: number; low_stock: boolean;
 }
 
@@ -38,7 +39,10 @@ export default function InventoryPage() {
   const { user } = useAuth();
   const isAdmin = user?.role === "ADMIN";
   const isAccountant = user?.role === "ACCOUNTANT";
-  const canSell = isAdmin || user?.role === "STAFF";
+  const isStaff = user?.role === "STAFF";
+  const canSell = isAdmin || isStaff; // Accountant cannot sell
+  const canPurchase = isAdmin || isStaff; // Staff can purchase stock
+  const canAddSku = isAdmin || isStaff; // Staff can add new SKU
 
   // Privacy lock state
   const [unlocked, setUnlocked] = useState(false);
@@ -104,10 +108,65 @@ export default function InventoryPage() {
   // Add SKU form
   const [form, setForm] = useState({
     sku: "", name: "", brand: "", capacity_ah: "", voltage_v: "",
-    import_cost_npr: "", selling_price_npr: "", stock_qty: "", reorder_level: "5",
+    import_cost_npr: "", selling_price_npr: "", stock_qty: "", reorder_level: "5", hs_code: "",
   });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // Edit SKU form state
+  const [editingItem, setEditingItem] = useState<Item | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: "", brand: "", capacity_ah: "", voltage_v: "",
+    import_cost_npr: "", selling_price_npr: "", stock_qty: "", reorder_level: "5", hs_code: "",
+  });
+  const [editError, setEditError] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  function handleOpenEditModal(item: Item) {
+    setEditingItem(item);
+    setEditForm({
+      name: item.name,
+      brand: item.brand || "",
+      capacity_ah: String(item.capacity_ah ?? ""),
+      voltage_v: String(item.voltage_v ?? ""),
+      import_cost_npr: String(item.import_cost_npr ?? ""),
+      selling_price_npr: String(item.selling_price_npr ?? ""),
+      stock_qty: String(item.stock_qty ?? 0),
+      reorder_level: String(item.reorder_level ?? 5),
+      hs_code: item.hs_code || "",
+    });
+    setEditError("");
+  }
+
+  async function handleSaveEditSku() {
+    if (!editingItem) return;
+    if (!editForm.name.trim()) {
+      setEditError("Product Name is required");
+      return;
+    }
+    setEditSubmitting(true);
+    setEditError("");
+    try {
+      await api.patch(`/api/inventory/${editingItem.id}`, {
+        name: editForm.name,
+        brand: editForm.brand || null,
+        capacity_ah: editForm.capacity_ah ? Number(editForm.capacity_ah) : null,
+        voltage_v: editForm.voltage_v ? Number(editForm.voltage_v) : null,
+        import_cost_npr: editForm.import_cost_npr ? Number(editForm.import_cost_npr) : undefined,
+        selling_price_npr: editForm.selling_price_npr ? Number(editForm.selling_price_npr) : undefined,
+        stock_qty: editForm.stock_qty ? Number(editForm.stock_qty) : undefined,
+        reorder_level: editForm.reorder_level ? Number(editForm.reorder_level) : 5,
+        hs_code: editForm.hs_code || null,
+      });
+      flashMsg(`SKU '${editingItem.sku}' updated successfully!`, "success");
+      setEditingItem(null);
+      load();
+    } catch (e: unknown) {
+      setEditError(e instanceof Error ? e.message : "Failed to update SKU");
+    } finally {
+      setEditSubmitting(false);
+    }
+  }
 
   // Sales Invoice form
   const [saleForm, setSaleForm] = useState({
@@ -115,6 +174,7 @@ export default function InventoryPage() {
     inventory_id: 0,
     quantity: 1,
     unit_price_npr: "",
+    discount_pct: "0",
     payment_method: "CREDIT",
     invoice_date: new Date().toISOString().split("T")[0],
     paid_amount_npr: "",
@@ -131,6 +191,7 @@ export default function InventoryPage() {
     address: "",
     customer_type: "B2C",
     credit_limit: "0",
+    pan_no: "",
   });
   const [applyVat, setApplyVat] = useState(false);
 
@@ -144,6 +205,11 @@ export default function InventoryPage() {
   });
   const [purchaseSubmitting, setPurchaseSubmitting] = useState(false);
 
+  // Inventory Movements Modal State
+  const [showMovementsModal, setShowMovementsModal] = useState(false);
+  const [movements, setMovements] = useState<any[]>([]);
+  const [movementsLoading, setMovementsLoading] = useState(false);
+
   const load = useCallback(() => {
     setLoading(true);
     Promise.all([
@@ -152,11 +218,13 @@ export default function InventoryPage() {
       api.get<BankLoan[]>("/api/loans/").catch(() => []),
       api.get<any>("/api/investors/").catch(() => ({ investors: [] })),
     ]).then(([i, c, l, invRes]) => {
-      setItems(i);
-      setCustomers(c);
+      setItems(Array.isArray(i) ? i : []);
+      setCustomers(Array.isArray(c) ? c : []);
       setLoans(Array.isArray(l) ? l : []);
-      const invList = Array.isArray(invRes) ? invRes : (invRes?.investors || []);
+      const invList = Array.isArray(invRes) ? invRes : (Array.isArray(invRes?.investors) ? invRes.investors : []);
       setInvestors(invList);
+    }).catch(err => {
+      console.warn("Failed to load inventory:", err);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -167,13 +235,14 @@ export default function InventoryPage() {
     setTimeout(() => setMsg({ text: "", type: "" }), 5000);
   };
 
-  const totalValue    = items.reduce((s, i) => s + i.inventory_value_npr, 0);
-  const lowStockCount = items.filter(i => i.low_stock).length;
-  const totalUnits    = items.reduce((s, i) => s + i.stock_qty, 0);
+  const safeItems     = Array.isArray(items) ? items : [];
+  const totalValue    = safeItems.reduce((s, i) => s + (Number(i.inventory_value_npr) || 0), 0);
+  const lowStockCount = safeItems.filter(i => i.low_stock).length;
+  const totalUnits    = safeItems.reduce((s, i) => s + (Number(i.stock_qty) || 0), 0);
 
-  const filtered = items.filter(i =>
-    i.sku.toLowerCase().includes(search.toLowerCase()) ||
-    i.name.toLowerCase().includes(search.toLowerCase()) ||
+  const filtered = safeItems.filter(i =>
+    i.sku?.toLowerCase().includes(search.toLowerCase()) ||
+    i.name?.toLowerCase().includes(search.toLowerCase()) ||
     i.brand?.toLowerCase().includes(search.toLowerCase())
   );
 
@@ -187,7 +256,7 @@ export default function InventoryPage() {
         stock_qty: Number(form.stock_qty), reorder_level: Number(form.reorder_level),
       });
       setShowForm(false);
-      setForm({ sku:"",name:"",brand:"",capacity_ah:"",voltage_v:"",import_cost_npr:"",selling_price_npr:"",stock_qty:"",reorder_level:"5" });
+      setForm({ sku:"",name:"",brand:"",capacity_ah:"",voltage_v:"",import_cost_npr:"",selling_price_npr:"",stock_qty:"",reorder_level:"5",hs_code:"" });
       flashMsg("New battery SKU added successfully!", "success");
       load();
     } catch(e: unknown) { setError(e instanceof Error ? e.message : "Failed to add item"); }
@@ -201,13 +270,14 @@ export default function InventoryPage() {
       inventory_id: defaultSku?.id || 0,
       quantity: 1,
       unit_price_npr: defaultSku ? String(defaultSku.selling_price_npr) : "",
+      discount_pct: "0",
       payment_method: "CREDIT",
       invoice_date: new Date().toISOString().split("T")[0],
       paid_amount_npr: "",
       partial_payment_method: "BANK",
     });
     setCustomerMode("existing");
-    setNewCustomer({ name: "", phone: "", email: "", address: "", customer_type: "B2C", credit_limit: "0" });
+    setNewCustomer({ name: "", phone: "", email: "", address: "", customer_type: "B2C", credit_limit: "0", pan_no: "" });
     setApplyVat(false);
     setShowSaleModal(true);
   };
@@ -279,6 +349,7 @@ export default function InventoryPage() {
           address: newCustomer.address.trim() || undefined,
           customer_type: newCustomer.customer_type,
           credit_limit: Number(newCustomer.credit_limit || 0),
+          pan_no: newCustomer.pan_no.trim() || undefined,
         });
         targetCustomerId = createdCust.id;
       } else {
@@ -306,6 +377,7 @@ export default function InventoryPage() {
               inventory_id: Number(saleForm.inventory_id),
               quantity: Number(saleForm.quantity),
               unit_price_npr: saleForm.unit_price_npr ? Number(saleForm.unit_price_npr) : selectedSku?.selling_price_npr,
+              discount_pct: Number(saleForm.discount_pct || 0),
             },
           ],
         }
@@ -363,7 +435,10 @@ export default function InventoryPage() {
 
   const selectedSkuForSale = items.find(i => i.id === Number(saleForm.inventory_id));
   const calcSaleUnitPrice = saleForm.unit_price_npr ? Number(saleForm.unit_price_npr) : (selectedSkuForSale?.selling_price_npr || 0);
-  const saleSubtotal = calcSaleUnitPrice * Number(saleForm.quantity || 0);
+  const saleGrossSubtotal = calcSaleUnitPrice * Number(saleForm.quantity || 0);
+  const saleDiscountPct = Number(saleForm.discount_pct || 0);
+  const saleDiscountAmount = Math.round(saleGrossSubtotal * (saleDiscountPct / 100.0));
+  const saleSubtotal = saleGrossSubtotal - saleDiscountAmount;
   const saleVatAmount = applyVat ? Math.round(saleSubtotal * 0.13) : 0;
   const totalSaleAmount = saleSubtotal + saleVatAmount;
   const unitPriceWithVat = applyVat ? Math.round(calcSaleUnitPrice * 1.13) : calcSaleUnitPrice;
@@ -405,9 +480,9 @@ export default function InventoryPage() {
 
   const FIELDS: [string, string, string, string][] = [
     ["sku","SKU *","LFP-12-100","text"], ["name","Name *","LFP 12V 100Ah Battery","text"],
-    ["brand","Brand","PowerNep","text"], ["capacity_ah","Capacity (Ah)","100","number"],
-    ["voltage_v","Voltage (V)","12","number"],
-    ...(isAdmin ? [["import_cost_npr","Import Cost NPR","18000","number"] as [string, string, string, string]] : []),
+    ["brand","Brand","PowerNep","text"], ["hs_code","HS Code (Tax Audit)","8507.60","text"],
+    ["capacity_ah","Capacity (Ah)","100","number"], ["voltage_v","Voltage (V)","12","number"],
+    ...(canAddSku ? [["import_cost_npr","Import Cost NPR","18000","number"] as [string, string, string, string]] : []),
     ["selling_price_npr","Selling Price NPR","24000","number"], ["stock_qty","Stock Qty","0","number"],
     ["reorder_level","Reorder Level","5","number"],
   ];
@@ -415,48 +490,72 @@ export default function InventoryPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
+        <div className="page-header-info">
           <h1 className="page-title">{isAdmin ? "Inventory & Stock Management" : isAccountant ? "Stock Audit & Price Directory" : "Product Catalog & Sales Portal"}</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
             {isAdmin ? "Purchase Inventory using Bank Loan Funds & Manage Stock" : isAccountant ? "Audit Remaining Stock Quantities & Customer Selling Prices" : "Check Battery Prices & Issue Customer Invoices"}
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+        <div className="page-actions">
           {isAdmin && (
             <button
               id="inventory-privacy-toggle"
               onClick={openLockModal}
               title={unlocked ? "Click to lock financial costs & margins" : "Click to reveal import costs & margins"}
               style={{
-                display: "flex", alignItems: "center", gap: "0.5rem",
-                padding: "0.5rem 1rem",
-                borderRadius: "0.625rem",
+                display: "flex", alignItems: "center", gap: "0.4rem",
+                padding: "0.45rem 0.85rem",
+                borderRadius: "0.5rem",
                 border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
                 background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
                 color: unlocked ? "#22c55e" : "#ef4444",
                 cursor: "pointer",
                 fontWeight: 600,
-                fontSize: "0.8rem",
+                fontSize: "0.8125rem",
                 transition: "all 0.2s ease",
               }}
             >
-              {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
+              {unlocked ? <Unlock size={14} /> : <Lock size={14} />}
               {unlocked ? "Lock Financials" : "Unlock Financials"}
             </button>
           )}
-          {isAdmin && (
+          {canPurchase && (
             <button className="btn btn-ghost" onClick={() => handleOpenPurchaseModal()} id="buy-stock-btn" style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}>
-              <ArrowDownLeft size={16} /> Purchase Stock (Bank Loan Funds)
+              <ArrowDownLeft size={15} /> Purchase Stock
             </button>
           )}
+          <button
+            className="btn btn-ghost"
+            onClick={() => {
+              setShowMovementsModal(true);
+              setMovementsLoading(true);
+              api.get<any[]>("/api/inventory/movements/log")
+                .then(setMovements)
+                .catch(() => setMovements([]))
+                .finally(() => setMovementsLoading(false));
+            }}
+            id="movement-log-btn"
+            style={{ borderColor: "rgba(129,140,248,0.4)", color: "#818cf8" }}
+          >
+            📋 Movement Log
+          </button>
+          <button
+            className="btn btn-ghost"
+            onClick={() => window.open("http://127.0.0.1:8000/api/inventory/export/stock-audit-csv", "_blank")}
+            style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}
+            id="download-stock-audit-csv-btn"
+            title="Download full remaining stock audit & valuation CSV report for tax auditors"
+          >
+            📥 Stock Audit CSV
+          </button>
           {canSell && (
             <button className="btn btn-primary" onClick={() => handleOpenSaleModal()} id="new-sale-btn" style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", border: "none" }}>
-              <ShoppingBag size={16} /> Sell Battery / Create Invoice
+              <ShoppingBag size={15} /> Create Invoice / Sell
             </button>
           )}
-          {isAdmin && (
+          {canAddSku && (
             <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-sku-btn">
-              <Plus size={16} /> Add SKU
+              <Plus size={15} /> Add SKU
             </button>
           )}
         </div>
@@ -470,7 +569,7 @@ export default function InventoryPage() {
       )}
 
       {/* Summary cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
           isAdmin
             ? { label: "Total Inventory Value", value: mask(formatNPR(totalValue)), isFinancial: true, color: "#6366f1", icon: Package }
@@ -527,6 +626,135 @@ export default function InventoryPage() {
             <button className="btn btn-primary" onClick={handleAddSku} disabled={submitting} id="save-sku-btn">
               {submitting ? "Saving..." : "Save SKU"}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* Edit SKU Modal */}
+      {editingItem && (
+        <div className="modal-overlay" onClick={() => setEditingItem(null)}>
+          <div
+            className="card"
+            style={{ width: "640px", maxWidth: "92vw", padding: "1.75rem", maxHeight: "calc(100vh - 3rem)", overflowY: "auto", margin: "auto" }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", borderBottom: "1px solid var(--border)", paddingBottom: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{ padding: "0.4rem", borderRadius: "0.5rem", background: "rgba(96,165,250,0.15)", color: "#60a5fa" }}>
+                  <Pencil size={18} />
+                </div>
+                <div>
+                  <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                    Edit SKU: <span style={{ color: "#818cf8" }}>{editingItem.sku}</span>
+                  </h2>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>Update battery specifications, stock count, and selling price</p>
+                </div>
+              </div>
+              <button onClick={() => setEditingItem(null)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={18} /></button>
+            </div>
+
+            {editError && <div className="alert alert-error" style={{ marginBottom: "1rem" }}>{editError}</div>}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.875rem", marginBottom: "1.25rem" }}>
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Product Name *</label>
+                <input
+                  type="text" className="input" placeholder="Battery Name"
+                  value={editForm.name}
+                  onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                  id="edit-sku-name"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Brand</label>
+                <input
+                  type="text" className="input" placeholder="e.g. PowerNep / Exide"
+                  value={editForm.brand}
+                  onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))}
+                  id="edit-sku-brand"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>HS Code (Tax Audit)</label>
+                <input
+                  type="text" className="input" placeholder="e.g. 8507.60"
+                  value={editForm.hs_code}
+                  onChange={e => setEditForm(f => ({ ...f, hs_code: e.target.value }))}
+                  id="edit-sku-hs"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Capacity (Ah)</label>
+                <input
+                  type="number" className="input" placeholder="e.g. 100"
+                  value={editForm.capacity_ah}
+                  onChange={e => setEditForm(f => ({ ...f, capacity_ah: e.target.value }))}
+                  id="edit-sku-capacity"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Voltage (V)</label>
+                <input
+                  type="number" className="input" placeholder="e.g. 12"
+                  value={editForm.voltage_v}
+                  onChange={e => setEditForm(f => ({ ...f, voltage_v: e.target.value }))}
+                  id="edit-sku-voltage"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Selling Price (NPR)</label>
+                <input
+                  type="number" className="input" placeholder="e.g. 24000"
+                  value={editForm.selling_price_npr}
+                  onChange={e => setEditForm(f => ({ ...f, selling_price_npr: e.target.value }))}
+                  id="edit-sku-price"
+                />
+              </div>
+
+              {canAddSku && (
+                <div>
+                  <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Import Cost (NPR)</label>
+                  <input
+                    type="number" className="input" placeholder="e.g. 18000"
+                    value={editForm.import_cost_npr}
+                    onChange={e => setEditForm(f => ({ ...f, import_cost_npr: e.target.value }))}
+                    id="edit-sku-cost"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Current Stock Qty</label>
+                <input
+                  type="number" className="input" placeholder="0"
+                  value={editForm.stock_qty}
+                  onChange={e => setEditForm(f => ({ ...f, stock_qty: e.target.value }))}
+                  id="edit-sku-stock"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Reorder Alert Level</label>
+                <input
+                  type="number" className="input" placeholder="5"
+                  value={editForm.reorder_level}
+                  onChange={e => setEditForm(f => ({ ...f, reorder_level: e.target.value }))}
+                  id="edit-sku-reorder"
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
+              <button className="btn btn-ghost" onClick={() => setEditingItem(null)}>Cancel</button>
+              <button className="btn btn-primary" onClick={handleSaveEditSku} disabled={editSubmitting} id="update-sku-btn">
+                {editSubmitting ? "Saving Changes..." : "Update SKU Details"}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -799,11 +1027,11 @@ export default function InventoryPage() {
                         </select>
                       </div>
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem" }}>
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.5rem" }}>
                       <div>
-                        <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "0.2rem" }}>Email / Address</label>
+                        <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "0.2rem" }}>Address</label>
                         <input
-                          type="text" className="input" placeholder="e.g. Balaju, Kathmandu"
+                          type="text" className="input" placeholder="Balaju, Kathmandu"
                           value={newCustomer.address}
                           onChange={e => setNewCustomer(c => ({ ...c, address: e.target.value }))}
                         />
@@ -814,6 +1042,15 @@ export default function InventoryPage() {
                           type="number" className="input" placeholder="0"
                           value={newCustomer.credit_limit}
                           onChange={e => setNewCustomer(c => ({ ...c, credit_limit: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: "0.7rem", color: "var(--text-muted)", display: "block", marginBottom: "0.2rem" }}>PAN Number</label>
+                        <input
+                          type="text" className="input" placeholder="610XXXXXX"
+                          value={newCustomer.pan_no}
+                          onChange={e => setNewCustomer(c => ({ ...c, pan_no: e.target.value }))}
+                          id="new-cust-pan-input"
                         />
                       </div>
                     </div>
@@ -840,7 +1077,7 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.75rem" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "0.75rem" }}>
                 <div>
                   <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
                     Quantity to Sell *
@@ -854,14 +1091,14 @@ export default function InventoryPage() {
                   />
                   {selectedSkuForSale && (
                     <p style={{ fontSize: "0.68rem", color: selectedSkuForSale.stock_qty > 0 ? "var(--text-muted)" : "#ef4444", marginTop: "3px" }}>
-                      Available stock: {selectedSkuForSale.stock_qty} units
+                      Available: {selectedSkuForSale.stock_qty} units
                     </p>
                   )}
                 </div>
 
                 <div>
                   <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
-                    Unit Selling Price (Excl. VAT)
+                    Unit Price (Excl. VAT)
                   </label>
                   <input
                     type="number" className="input"
@@ -869,6 +1106,18 @@ export default function InventoryPage() {
                     value={saleForm.unit_price_npr}
                     onChange={e => setSaleForm(f => ({ ...f, unit_price_npr: e.target.value }))}
                     id="sale-price-input"
+                  />
+                </div>
+
+                <div>
+                  <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
+                    Discount %
+                  </label>
+                  <input
+                    type="number" className="input" min="0" max="100" placeholder="0"
+                    value={saleForm.discount_pct}
+                    onChange={e => setSaleForm(f => ({ ...f, discount_pct: e.target.value }))}
+                    id="sale-discount-input"
                   />
                 </div>
               </div>
@@ -1001,12 +1250,16 @@ export default function InventoryPage() {
                           Total Invoice Calculation
                         </p>
                         <div style={{ fontSize: "0.78rem", color: "var(--text-muted)" }}>
-                          Subtotal ({saleForm.quantity} x {formatNPR(calcSaleUnitPrice)}): <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{formatNPR(saleSubtotal)}</span>
+                          Gross Subtotal: <span style={{ color: "var(--text-primary)", fontWeight: 600 }}>{formatNPR(saleGrossSubtotal)}</span>
                         </div>
+                        {saleDiscountAmount > 0 && (
+                          <div style={{ fontSize: "0.78rem", color: "#22c55e", fontWeight: 600 }}>
+                            - Discount ({saleDiscountPct}%): <span>-{formatNPR(saleDiscountAmount)}</span>
+                          </div>
+                        )}
                         {applyVat && (
                           <div style={{ fontSize: "0.78rem", color: "#818cf8", fontWeight: 500 }}>
                             + 13% VAT: <span style={{ fontWeight: 700 }}>{formatNPR(saleVatAmount)}</span>
-                            <span style={{ fontSize: "0.7rem", opacity: 0.8, marginLeft: "4px" }}>({formatNPR(unitPriceWithVat)} / unit incl. VAT)</span>
                           </div>
                         )}
                         <div style={{ marginTop: "0.25rem" }}>
@@ -1072,10 +1325,11 @@ export default function InventoryPage() {
         {loading ? (
           <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}><div className="spinner" /></div>
         ) : (
-          <table className="data-table">
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table className="data-table">
             <thead>
               <tr>
-                <th>SKU</th><th>Name</th><th>Brand</th><th>Spec</th>
+                <th>SKU</th><th>HS Code</th><th>Name</th><th>Brand</th><th>Spec</th>
                 {isAdmin && <th style={{ textAlign: "right" }}>Import Cost</th>}
                 <th style={{ textAlign: "right" }}>Selling Price</th>
                 {isAdmin && <th style={{ textAlign: "right" }}>Margin</th>}
@@ -1089,6 +1343,7 @@ export default function InventoryPage() {
               {filtered.map(item => (
                 <tr key={item.id}>
                   <td><code style={{ fontSize: "0.75rem", color: "#818cf8" }}>{item.sku}</code></td>
+                  <td><code style={{ fontSize: "0.75rem", color: "#22c55e" }}>{item.hs_code || "—"}</code></td>
                   <td style={{ fontWeight: 500 }}>{item.name}</td>
                   <td className="text-muted">{item.brand}</td>
                   <td className="text-faint" style={{ fontSize: "0.8rem" }}>{item.voltage_v}V / {item.capacity_ah}Ah</td>
@@ -1119,7 +1374,7 @@ export default function InventoryPage() {
                   </td>
                   <td style={{ textAlign: "center" }}>
                     <div style={{ display: "flex", gap: "0.375rem", justifyContent: "center" }}>
-                      {isAdmin && (
+                      {canPurchase && (
                         <button
                           className="btn btn-ghost"
                           style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", color: "#22c55e", borderColor: "rgba(34,197,94,0.3)" }}
@@ -1140,6 +1395,17 @@ export default function InventoryPage() {
                           <ShoppingBag size={12} style={{ marginRight: 3 }} /> Sell
                         </button>
                       )}
+                      {canAddSku && (
+                        <button
+                          className="btn btn-ghost"
+                          style={{ fontSize: "0.72rem", padding: "0.25rem 0.5rem", color: "#60a5fa", borderColor: "rgba(96,165,250,0.3)" }}
+                          onClick={() => handleOpenEditModal(item)}
+                          id={`edit-btn-${item.id}`}
+                          title="Edit SKU specifications, pricing or details"
+                        >
+                          <Pencil size={12} style={{ marginRight: 3 }} /> Edit
+                        </button>
+                      )}
                       {isAccountant && (
                         <span className="badge badge-amber" style={{ fontSize: "0.7rem" }}>AUDIT READ-ONLY</span>
                       )}
@@ -1149,6 +1415,7 @@ export default function InventoryPage() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
@@ -1204,6 +1471,77 @@ export default function InventoryPage() {
               <button className="btn btn-primary" style={{ flex: 1 }} onClick={handlePinSubmit}>
                 <Unlock size={14} /> Unlock
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Inventory Movement Log Modal */}
+      {showMovementsModal && (
+        <div className="modal-overlay" onClick={() => setShowMovementsModal(false)}>
+          <div
+            className="card"
+            style={{ width: "880px", maxWidth: "95vw", display: "flex", flexDirection: "column", maxHeight: "calc(100vh - 3rem)", margin: "auto" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1.25rem 1.75rem", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
+                📋 Inventory Movement Audit Log (Stock IN / Stock OUT)
+              </h2>
+              <button onClick={() => setShowMovementsModal(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}>
+                <X size={18} />
+              </button>
+            </div>
+
+            <div style={{ overflowY: "auto", padding: "1.25rem 1.75rem", flex: 1 }}>
+              {movementsLoading ? (
+                <div style={{ padding: "3rem", textAlign: "center" }}><div className="spinner" /></div>
+              ) : movements.length === 0 ? (
+                <div style={{ padding: "2rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                  No stock movements recorded yet.
+                </div>
+              ) : (
+                <table className="data-table" style={{ fontSize: "0.8rem" }}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Ref #</th>
+                      <th>Type</th>
+                      <th>SKU</th>
+                      <th>Product Name</th>
+                      <th style={{ textAlign: "center" }}>Qty</th>
+                      <th style={{ textAlign: "right" }}>Amount (NPR)</th>
+                      <th>Narration</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {movements.map((m: any, idx: number) => (
+                      <tr key={idx}>
+                        <td style={{ whiteSpace: "nowrap" }} className="text-muted">{m.date}</td>
+                        <td><code style={{ fontSize: "0.75rem", color: "#818cf8" }}>{m.reference}</code></td>
+                        <td>
+                          <span className={`badge ${m.movement_type === "IN" ? "badge-green" : "badge-amber"}`}>
+                            {m.movement_type === "IN" ? "⬆ STOCK IN" : "⬇ STOCK OUT"}
+                          </span>
+                        </td>
+                        <td><code style={{ fontSize: "0.75rem" }}>{m.sku}</code></td>
+                        <td style={{ fontWeight: 500 }}>{m.item_name}</td>
+                        <td style={{ textAlign: "center", fontWeight: 700, color: m.movement_type === "IN" ? "#22c55e" : "#f59e0b" }}>
+                          {m.quantity ? `${m.movement_type === "IN" ? "+" : "-"}${m.quantity}` : "—"}
+                        </td>
+                        <td style={{ textAlign: "right", fontWeight: 600 }}>{formatNPR(m.amount_npr)}</td>
+                        <td style={{ fontSize: "0.75rem", color: "var(--text-muted)", maxWidth: "200px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {m.narration}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", padding: "1rem 1.75rem", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              <button className="btn btn-ghost" onClick={() => setShowMovementsModal(false)}>Close</button>
             </div>
           </div>
         </div>

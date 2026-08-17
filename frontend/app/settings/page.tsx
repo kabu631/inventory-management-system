@@ -24,7 +24,37 @@ interface BackupInfo {
 
 export default function SettingsPage() {
   const { user } = useAuth();
-  if (user && user.role !== "ADMIN") {
+  const [data, setData] = useState<BackupInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [msg, setMsg] = useState({ text: "", type: "" });
+  const [restoring, setRestoring] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const isAuthorized = !user || user.role === "ADMIN" || user.role === "STAFF";
+
+  const loadData = useCallback(() => {
+    if (!isAuthorized) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    api.get<BackupInfo>("/api/backup/list")
+      .then(res => {
+        if (res && Array.isArray(res.backups)) {
+          setData(res);
+        } else {
+          setData({ backup_directory: "", latest_backup_file: "", backups: [] });
+        }
+      })
+      .catch(err => setMsg({ text: err.message || "Failed to fetch backup info", type: "error" }))
+      .finally(() => setLoading(false));
+  }, [isAuthorized]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  if (!isAuthorized) {
     return (
       <div style={{ padding: "4rem", textAlign: "center" }}>
         <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
@@ -38,29 +68,6 @@ export default function SettingsPage() {
       </div>
     );
   }
-  const [data, setData] = useState<BackupInfo | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [msg, setMsg] = useState({ text: "", type: "" });
-  const [restoring, setRestoring] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-
-  const loadData = useCallback(() => {
-    setLoading(true);
-    api.get<BackupInfo>("/api/backup/list")
-      .then(res => {
-        if (res && Array.isArray(res.backups)) {
-          setData(res);
-        } else {
-          setData({ backup_directory: "", latest_backup_file: "", backups: [] });
-        }
-      })
-      .catch(err => setMsg({ text: err.message || "Failed to fetch backup info", type: "error" }))
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    loadData();
-  }, [loadData]);
 
   const flashMsg = (text: string, type: "success" | "error") => {
     setMsg({ text, type });
@@ -161,15 +168,17 @@ export default function SettingsPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Data Backup & Disaster Recovery</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>
-            Automated Google Drive / Cloud Sync & 1-Click System State Restoration
+        <div className="page-header-info">
+          <h1 className="page-title">Data Backup &amp; Disaster Recovery</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
+            Automated Google Drive / Cloud Sync &amp; 1-Click System State Restoration
           </p>
         </div>
-        <button className="btn btn-primary" onClick={handleTriggerBackup} id="backup-now-btn">
-          <RefreshCw size={16} /> Backup Database Now
-        </button>
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={handleTriggerBackup} id="backup-now-btn">
+            <RefreshCw size={15} /> Backup Database Now
+          </button>
+        </div>
       </div>
 
       {msg.text && (
@@ -180,7 +189,7 @@ export default function SettingsPage() {
       )}
 
       {/* Auto-backup & Cloud Sync Status Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         <div className="kpi-card glow-green">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>

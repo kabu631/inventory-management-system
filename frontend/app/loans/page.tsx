@@ -21,20 +21,6 @@ interface AggregateSummary {
 
 export default function LoansPage() {
   const { user } = useAuth();
-  if (user && user.role !== "ADMIN") {
-    return (
-      <div style={{ padding: "4rem", textAlign: "center" }}>
-        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
-          <ShieldAlert size={36} color="#ef4444" />
-        </div>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Investor Access Required</h2>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
-          Bank loan records, corporate borrowing, and interest repayment liabilities are restricted strictly to company administrators and investors.
-        </p>
-        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
-      </div>
-    );
-  }
   const [loans, setLoans] = useState<LoanSummary[]>([]);
   const [agg, setAgg] = useState<AggregateSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -51,14 +37,41 @@ export default function LoansPage() {
   const [repForm, setRepForm] = useState({ payment_date: new Date().toISOString().split("T")[0], principal_paid_npr:"", interest_paid_npr:"", notes:"" });
   const [submitting, setSubmitting] = useState(false);
 
+  const isAuthorized = !user || user.role === "ADMIN" || user.role === "ACCOUNTANT";
+
   const load = useCallback(() => {
+    if (!isAuthorized) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     Promise.all([api.get<LoanSummary[]>("/api/loans/"), api.get<AggregateSummary>("/api/loans/summary")])
-      .then(([l, a]) => { setLoans(l); setAgg(a); }).finally(() => setLoading(false));
-  }, []);
+      .then(([l, a]) => {
+        setLoans(Array.isArray(l) ? l : []);
+        setAgg(a && typeof a === "object" && !Array.isArray(a) ? a : null);
+      })
+      .catch((e) => console.warn("Failed to load loans:", e))
+      .finally(() => setLoading(false));
+  }, [isAuthorized]);
+
   useEffect(() => { load(); }, [load]);
 
   const flash = (text: string, type: string) => { setMsg({ text, type }); setTimeout(() => setMsg({ text:"", type:"" }), 4000); };
+
+  if (!isAuthorized) {
+    return (
+      <div style={{ padding: "4rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Accountant Access Required</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
+          Bank loan records, corporate borrowing, and interest repayment liabilities are restricted strictly to company administrators and accountants.
+        </p>
+        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
+      </div>
+    );
+  }
 
   const addLoan = async () => {
     setSubmitting(true);
@@ -137,13 +150,15 @@ export default function LoansPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Bank Loans</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Bank Loan Principal, Repayment & Repayment Amount Editing</p>
+        <div className="page-header-info">
+          <h1 className="page-title">Bank Loans &amp; Liabilities</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>Corporate Borrowing, Interest Accrual &amp; Debt Repayment Management</p>
         </div>
-        <button className="btn btn-primary" onClick={() => setShowAddForm(true)} id="add-loan-btn">
-          <Plus size={16} /> Add Loan
-        </button>
+        <div className="page-actions">
+          <button className="btn btn-primary" onClick={() => setShowAddForm(true)} id="add-loan-btn">
+            <Plus size={15} /> Add Loan
+          </button>
+        </div>
       </div>
 
       {msg.text && (
@@ -154,7 +169,7 @@ export default function LoansPage() {
 
       {/* Aggregate */}
       {agg && (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
           {[
             { label: "Active Loans",           value: `${agg.active_loans}` },
             { label: "Total Principal",         value: formatNPR(agg.total_principal_npr) },

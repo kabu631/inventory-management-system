@@ -102,17 +102,17 @@ export default function WarrantyPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Battery Serial & Warranty Management</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Individual Battery Unit Tracking, Warranty Expiry & Defective Claim Processing</p>
+        <div className="page-header-info">
+          <h1 className="page-title">Battery Serial &amp; Warranty Management</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>Individual Battery Unit Tracking, Warranty Expiry &amp; Defective Claim Processing</p>
         </div>
         {canManageWarranty && (
-          <div style={{ display: "flex", gap: "0.75rem" }}>
+          <div className="page-actions">
             <button className="btn btn-ghost" onClick={() => setShowClaimModal(true)} style={{ borderColor: "rgba(239,68,68,0.4)", color: "#ef4444" }}>
-              <ShieldAlert size={16} /> Submit Warranty Claim
+              <ShieldAlert size={15} /> Submit Warranty Claim
             </button>
             <button className="btn btn-primary" onClick={() => setShowRegModal(true)}>
-              <Barcode size={16} /> Register Battery Serials
+              <Barcode size={15} /> Register Serials
             </button>
           </div>
         )}

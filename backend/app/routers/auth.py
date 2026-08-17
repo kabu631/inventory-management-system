@@ -83,7 +83,7 @@ class LoginRequest(BaseModel):
     password: str
 
 
-from app.services.auth import create_access_token
+from app.services.auth import create_access_token, get_current_user
 
 @router.post("/login")
 def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -109,6 +109,8 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         "status": "success",
         "message": f"Welcome back, {user.full_name}!",
         "token": token,
+        "access_token": token,
+        "token_type": "bearer",
         "user": {
             "id": user.id,
             "username": user.username,
@@ -116,6 +118,17 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
             "full_name": user.full_name,
             "staff_id": user.staff_id,
         },
+    }
+
+
+@router.get("/me")
+def get_me(current_user: User = Depends(get_current_user)):
+    return {
+        "id": current_user.id,
+        "username": current_user.username,
+        "role": current_user.role,
+        "full_name": current_user.full_name,
+        "staff_id": current_user.staff_id,
     }
 
 

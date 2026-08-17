@@ -14,7 +14,7 @@ from app.services.backup import (
 from app.database import DB_PATH
 from app.services.auth import require_roles
 
-router = APIRouter(dependencies=[Depends(require_roles(["ADMIN"]))])
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN", "STAFF"]))])
 
 
 @router.get("/list")

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import Optional
 from app.database import get_db
-from app.models import Inventory
+from app.models import Inventory, User
 from app.routers.customers import get_customer_balance
+from app.services.auth import require_roles
 
 router = APIRouter()
 
@@ -19,6 +20,7 @@ class InventoryCreate(BaseModel):
     selling_price_npr: float = 0.0
     stock_qty: int = 0
     reorder_level: int = 5
+    hs_code: Optional[str] = None
 
 
 class InventoryUpdate(BaseModel):
@@ -30,6 +32,7 @@ class InventoryUpdate(BaseModel):
     selling_price_npr: Optional[float] = None
     stock_qty: Optional[int] = None
     reorder_level: Optional[int] = None
+    hs_code: Optional[str] = None
 
 
 @router.get("/")
@@ -47,6 +50,7 @@ def list_inventory(db: Session = Depends(get_db)):
             "selling_price_npr": i.selling_price_npr,
             "stock_qty": i.stock_qty,
             "reorder_level": i.reorder_level,
+            "hs_code": i.hs_code,
             "inventory_value_npr": round(i.import_cost_npr * i.stock_qty, 2),
             "low_stock": i.stock_qty <= i.reorder_level,
         }
@@ -63,7 +67,11 @@ def get_inventory_item(item_id: int, db: Session = Depends(get_db)):
 
 
 @router.post("/", status_code=201)
-def create_inventory(payload: InventoryCreate, db: Session = Depends(get_db)):
+def create_inventory(
+    payload: InventoryCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["ADMIN", "STAFF"])),
+):
     existing = db.query(Inventory).filter(Inventory.sku == payload.sku).first()
     if existing:
         raise HTTPException(status_code=400, detail="SKU already exists")
@@ -75,7 +83,12 @@ def create_inventory(payload: InventoryCreate, db: Session = Depends(get_db)):
 
 
 @router.patch("/{item_id}")
-def update_inventory(item_id: int, payload: InventoryUpdate, db: Session = Depends(get_db)):
+def update_inventory(
+    item_id: int,
+    payload: InventoryUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["ADMIN", "STAFF"])),
+):
     item = db.query(Inventory).filter(Inventory.id == item_id).first()
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")
@@ -96,6 +109,7 @@ class SaleItemIn(BaseModel):
     inventory_id: int
     quantity: int
     unit_price_npr: Optional[float] = None
+    discount_pct: Optional[float] = 0.0
 
 
 class SalesInvoiceCreate(BaseModel):
@@ -108,10 +122,15 @@ class SalesInvoiceCreate(BaseModel):
     vat_rate: Optional[float] = 13.0
     paid_amount_npr: Optional[float] = None
     partial_payment_method: Optional[str] = "BANK"  # "CASH" or "BANK" for upfront payment portion
+    discount_pct: Optional[float] = 0.0
 
 
 @router.post("/sell", status_code=201)
-def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_db)):
+def create_sales_invoice(
+    payload: SalesInvoiceCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["ADMIN", "STAFF"])),
+):
     """
     Sells products to a customer:
     1. Validates stock availability.
@@ -144,7 +163,10 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
             )
 
         unit_price = item_in.unit_price_npr if item_in.unit_price_npr is not None else sku.selling_price_npr
-        item_revenue = unit_price * item_in.quantity
+        disc_pct = item_in.discount_pct if item_in.discount_pct is not None else (payload.discount_pct or 0.0)
+        item_gross_revenue = unit_price * item_in.quantity
+        item_discount = round(item_gross_revenue * (disc_pct / 100.0), 2)
+        item_revenue = round(item_gross_revenue - item_discount, 2)
         item_cogs = sku.import_cost_npr * item_in.quantity
 
         subtotal_revenue += item_revenue
@@ -152,7 +174,14 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
 
         # Deduct Stock
         sku.stock_qty -= item_in.quantity
-        processed_items.append({"sku": sku, "qty": item_in.quantity, "unit_price": unit_price})
+        processed_items.append({
+            "sku": sku,
+            "qty": item_in.quantity,
+            "unit_price": unit_price,
+            "discount_pct": disc_pct,
+            "discount_amount": item_discount,
+            "net_revenue": item_revenue
+        })
 
     # Calculate VAT (if applied)
     vat_amount = 0.0
@@ -196,7 +225,12 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
     ref = payload.reference or f"INV-{payload.invoice_date.strftime('%Y%m%d')}-{customer.id}"
     item_names = ", ".join([f"{pi['qty']}x {pi['sku'].name}" for pi in processed_items])
     vat_str = " (incl. 13% VAT)" if payload.apply_vat else ""
-    narration = f"Sale of {item_names} to {customer.name} ({payload.payment_method}){vat_str}"
+    disc_summary = ""
+    total_disc = sum(pi["discount_amount"] for pi in processed_items)
+    if total_disc > 0:
+        disc_summary = f" (Discount Applied: Rs.{total_disc:,.2f})"
+
+    narration = f"Sale of {item_names} to {customer.name} ({payload.payment_method}){vat_str}{disc_summary}"
     if is_partial and paid_amount > 0 and credit_due > 0:
         narration += f" — Paid Rs.{paid_amount:,.2f}, Remaining Due Rs.{credit_due:,.2f}"
 
@@ -204,6 +238,7 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
         entry_date=payload.invoice_date,
         reference=ref,
         narration=narration,
+        category="SALES",
     )
     db.add(entry)
     db.flush()
@@ -243,28 +278,32 @@ def create_sales_invoice(payload: SalesInvoiceCreate, db: Session = Depends(get_
             ))
 
     if acc_sales:
-        db.add(JournalLine(
-            entry_id=entry.id, account_id=acc_sales.id,
-            debit_npr=0.0, credit_npr=subtotal_revenue, description=f"Sales Revenue ({len(processed_items)} items)"
-        ))
+        for pi in processed_items:
+            db.add(JournalLine(
+                entry_id=entry.id, account_id=acc_sales.id, inventory_id=pi["sku"].id, customer_id=customer.id,
+                debit_npr=0.0, credit_npr=pi["net_revenue"],
+                description=f"Sales Revenue ({pi['qty']}x {pi['sku'].name})"
+            ))
 
     if acc_vat and vat_amount > 0:
         db.add(JournalLine(
-            entry_id=entry.id, account_id=acc_vat.id,
+            entry_id=entry.id, account_id=acc_vat.id, customer_id=customer.id,
             debit_npr=0.0, credit_npr=vat_amount, description=f"13% VAT Payable ({customer.name})"
         ))
 
-    if acc_cogs and total_cogs > 0:
-        db.add(JournalLine(
-            entry_id=entry.id, account_id=acc_cogs.id,
-            debit_npr=total_cogs, credit_npr=0.0, description="Cost of Goods Sold"
-        ))
+    for pi in processed_items:
+        item_cogs = pi["sku"].import_cost_npr * pi["qty"]
+        if acc_cogs and item_cogs > 0:
+            db.add(JournalLine(
+                entry_id=entry.id, account_id=acc_cogs.id, inventory_id=pi["sku"].id, customer_id=customer.id,
+                debit_npr=item_cogs, credit_npr=0.0, description=f"Cost of Goods Sold ({pi['qty']}x {pi['sku'].name})"
+            ))
 
-    if acc_stock and total_cogs > 0:
-        db.add(JournalLine(
-            entry_id=entry.id, account_id=acc_stock.id,
-            debit_npr=0.0, credit_npr=total_cogs, description="Inventory reduction"
-        ))
+        if acc_stock and item_cogs > 0:
+            db.add(JournalLine(
+                entry_id=entry.id, account_id=acc_stock.id, inventory_id=pi["sku"].id, customer_id=customer.id,
+                debit_npr=0.0, credit_npr=item_cogs, description=f"Inventory reduction ({pi['qty']}x {pi['sku'].name})"
+            ))
 
     db.commit()
     db.refresh(entry)
@@ -298,7 +337,11 @@ class InventoryPurchaseCreate(BaseModel):
 
 
 @router.post("/purchase", status_code=201)
-def create_inventory_purchase(payload: InventoryPurchaseCreate, db: Session = Depends(get_db)):
+def create_inventory_purchase(
+    payload: InventoryPurchaseCreate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_roles(["ADMIN", "STAFF"])),
+):
     """
     Purchases/imports inventory using Bank Loan funds, Investor Equity Capital, Cash, or Supplier Credit:
     1. Increases Inventory stock_qty.
@@ -352,6 +395,7 @@ def create_inventory_purchase(payload: InventoryPurchaseCreate, db: Session = De
         entry_date=payload.purchase_date,
         reference=ref,
         narration=narration,
+        category="PURCHASE",
     )
     db.add(entry)
     db.flush()
@@ -364,10 +408,12 @@ def create_inventory_purchase(payload: InventoryPurchaseCreate, db: Session = De
     payment_acc = acc_bank if payload.payment_method.upper() == "BANK" else (acc_cash if payload.payment_method.upper() == "CASH" else acc_ap)
 
     if acc_stock:
-        db.add(JournalLine(
-            entry_id=entry.id, account_id=acc_stock.id,
-            debit_npr=total_cost, credit_npr=0.0, description=f"Stock received ({item_names})"
-        ))
+        for pi in processed_items:
+            item_total_cost = pi["unit_cost"] * pi["qty"]
+            db.add(JournalLine(
+                entry_id=entry.id, account_id=acc_stock.id, inventory_id=pi["sku"].id,
+                debit_npr=item_total_cost, credit_npr=0.0, description=f"Stock received ({pi['qty']}x {pi['sku'].name})"
+            ))
 
     if payment_acc:
         db.add(JournalLine(
@@ -416,6 +462,7 @@ def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
                 "address": line.customer.address or "Nepal",
                 "customer_type": line.customer.customer_type,
                 "credit_limit": line.customer.credit_limit,
+                "pan_no": line.customer.pan_no or "—",
             }
 
         # Track total invoice bill amount (debit amount on payment/receivable line)
@@ -425,6 +472,7 @@ def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
         lines_detail.append({
             "account_code": code,
             "account_name": line.account.name if line.account else "",
+            "hs_code": line.inventory_item.hs_code if line.inventory_item else None,
             "debit_npr": line.debit_npr,
             "credit_npr": line.credit_npr,
             "description": line.description,
@@ -451,4 +499,126 @@ def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
     }
 
 
+@router.get("/movements/log")
+def get_inventory_movements(
+    sku_id: Optional[int] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """
+    Returns inventory movements (Stock IN from purchases, Stock OUT from sales)
+    by querying journal lines attached to inventory items.
+    """
+    q = (
+        db.query(JournalLine)
+        .join(JournalLine.entry)
+        .filter(JournalLine.inventory_id.isnot(None))
+    )
 
+    if sku_id:
+        q = q.filter(JournalLine.inventory_id == sku_id)
+    if start_date:
+        q = q.filter(JournalEntry.entry_date >= start_date)
+    if end_date:
+        q = q.filter(JournalEntry.entry_date <= end_date)
+
+    lines = q.order_by(JournalEntry.entry_date.desc(), JournalLine.id.desc()).all()
+
+    movements = []
+    for line in lines:
+        entry = line.entry
+        item = line.inventory_item
+        # Account code 1004 is Inventory account
+        # Debit to 1004 = Stock IN (Purchase)
+        # Credit to 1004 = Stock OUT (Sale / COGS reduction)
+        movement_type = "IN" if line.debit_npr > 0 else "OUT"
+        qty = 0
+        
+        # Parse quantity from line description or entry narration if possible
+        desc = line.description or entry.narration or ""
+        import re
+        match = re.search(r'(\d+)\s*x', desc)
+        if match:
+            qty = int(match.group(1))
+
+        movements.append({
+            "line_id": line.id,
+            "entry_id": entry.id,
+            "date": entry.entry_date.strftime("%Y-%m-%d") if hasattr(entry.entry_date, "strftime") else str(entry.entry_date),
+            "reference": entry.reference or f"JE-{entry.id}",
+            "sku": item.sku if item else "—",
+            "item_name": item.name if item else "—",
+            "movement_type": movement_type,
+            "quantity": qty,
+            "amount_npr": line.debit_npr if movement_type == "IN" else line.credit_npr,
+            "narration": entry.narration,
+            "category": entry.category or "GENERAL",
+            "customer": line.customer.name if line.customer else None,
+        })
+
+    return movements
+
+
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
+@router.get("/export/stock-audit-csv")
+def export_stock_audit_csv(db: Session = Depends(get_db)):
+    """
+    Exports downloadable Stock Audit CSV report containing remaining stock quantities,
+    HS Codes, unit costs, selling prices, and total stock asset valuation for tax auditing.
+    """
+    items = db.query(Inventory).order_by(Inventory.sku.asc()).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["RENEW GEN RESOURCES — INVENTORY STOCK AUDIT & VALUATION REPORT"])
+    writer.writerow([f"Generated Date: {date.today().strftime('%Y-%m-%d')}", "Company PAN: 610464122"])
+    writer.writerow([])
+    writer.writerow([
+        "Item ID", "SKU", "HS Code", "Product Name", "Brand", "Spec (Voltage / Ah)",
+        "Remaining Stock Qty", "Reorder Level", "Stock Status",
+        "Import Unit Cost (NPR)", "Selling Price (NPR)", "Total Stock Asset Valuation (NPR)"
+    ])
+
+    total_units = 0
+    total_inventory_valuation = 0.0
+
+    for item in items:
+        total_val = item.import_cost_npr * item.stock_qty
+        total_units += item.stock_qty
+        total_inventory_valuation += total_val
+        status = "LOW STOCK WARNING" if item.stock_qty <= item.reorder_level else "OK"
+        spec = f"{item.voltage_v or 0}V / {item.capacity_ah or 0}Ah"
+
+        writer.writerow([
+            item.id,
+            item.sku,
+            item.hs_code or "N/A",
+            item.name,
+            item.brand or "",
+            spec,
+            item.stock_qty,
+            item.reorder_level,
+            status,
+            f"{item.import_cost_npr:.2f}",
+            f"{item.selling_price_npr:.2f}",
+            f"{total_val:.2f}"
+        ])
+
+    writer.writerow([])
+    writer.writerow([
+        "TOTAL INVENTORY AUDIT VALUATION", "", "", "", "", "",
+        total_units, "", "", "", "", f"{total_inventory_valuation:.2f}"
+    ])
+
+    output.seek(0)
+    response = StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv"
+    )
+    response.headers["Content-Disposition"] = "attachment; filename=renewgen_inventory_stock_audit.csv"
+    return response

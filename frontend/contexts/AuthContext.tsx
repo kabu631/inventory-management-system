@@ -35,19 +35,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      // Clear any legacy persistent localStorage auth items
-      localStorage.removeItem("rg_erp_user");
-      localStorage.removeItem("rg_erp_token");
-
-      // Read current tab/browser session storage
-      const storedUser = sessionStorage.getItem("rg_erp_user");
-      const storedToken = sessionStorage.getItem("rg_erp_token");
+      const storedUser = localStorage.getItem("rg_erp_user") || sessionStorage.getItem("rg_erp_user");
+      const storedToken = localStorage.getItem("rg_erp_token") || sessionStorage.getItem("rg_erp_token");
 
       if (storedUser && storedToken) {
         setUser(JSON.parse(storedUser));
         setToken(storedToken);
       }
     } catch {
+      localStorage.removeItem("rg_erp_user");
+      localStorage.removeItem("rg_erp_token");
       sessionStorage.removeItem("rg_erp_user");
       sessionStorage.removeItem("rg_erp_token");
     } finally {
@@ -59,7 +56,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!loading) {
       const normalizedPath = pathname?.replace(/\/$/, "") || "/";
       if (!user && normalizedPath !== "/login") {
-        router.push("/login");
+        router.replace("/login");
       }
     }
   }, [user, loading, pathname, router]);
@@ -67,19 +64,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = (userData: UserProfile, authToken: string) => {
     setUser(userData);
     setToken(authToken);
-    sessionStorage.setItem("rg_erp_user", JSON.stringify(userData));
-    sessionStorage.setItem("rg_erp_token", authToken);
-    router.push("/");
+    try {
+      localStorage.setItem("rg_erp_user", JSON.stringify(userData));
+      localStorage.setItem("rg_erp_token", authToken);
+      sessionStorage.setItem("rg_erp_user", JSON.stringify(userData));
+      sessionStorage.setItem("rg_erp_token", authToken);
+    } catch {}
+    router.replace("/");
   };
 
   const logout = () => {
     setUser(null);
     setToken(null);
-    sessionStorage.removeItem("rg_erp_user");
-    sessionStorage.removeItem("rg_erp_token");
-    localStorage.removeItem("rg_erp_user");
-    localStorage.removeItem("rg_erp_token");
-    router.push("/login");
+    try {
+      sessionStorage.removeItem("rg_erp_user");
+      sessionStorage.removeItem("rg_erp_token");
+      localStorage.removeItem("rg_erp_user");
+      localStorage.removeItem("rg_erp_token");
+    } catch {}
+    router.replace("/login");
   };
 
   return (

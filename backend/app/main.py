@@ -29,12 +29,14 @@ async def lifespan(app: FastAPI):
     from app.routers.auth import ensure_default_users
     from app.routers.investors import ensure_default_investors
     from app.routers.journal import ensure_default_account_heads
+    from app.routers.warehouses import ensure_default_warehouses
     init_db()
     db = SessionLocal()
     try:
         ensure_default_account_heads(db)
         ensure_default_users(db)
         ensure_default_investors(db)
+        ensure_default_warehouses(db)
     finally:
         db.close()
     # Trigger an immediate startup backup to Google Drive

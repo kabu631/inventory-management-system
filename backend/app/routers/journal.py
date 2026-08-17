@@ -5,8 +5,9 @@ from typing import Optional, List
 from datetime import date
 from app.database import get_db
 from app.models import JournalEntry, JournalLine, AccountHead
+from app.services.auth import require_roles
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN", "ACCOUNTANT"]))])
 
 DEFAULT_ACCOUNT_HEADS = [
     # ASSETS
@@ -60,6 +61,7 @@ class JournalEntryCreate(BaseModel):
     entry_date: date
     reference: Optional[str] = None
     narration: Optional[str] = None
+    category: Optional[str] = "GENERAL"
     lines: List[JournalLineIn]
 
     @field_validator("lines")
@@ -94,6 +96,7 @@ def _serialize_entry(entry: JournalEntry) -> dict:
         "entry_date": entry.entry_date,
         "reference": entry.reference,
         "narration": entry.narration,
+        "category": entry.category or "GENERAL",
         "is_posted": entry.is_posted,
         "created_at": entry.created_at,
         "total_debit_npr": total_debit,
@@ -117,19 +120,86 @@ def _serialize_entry(entry: JournalEntry) -> dict:
 # ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+def get_fiscal_year_for_date(d: date) -> str:
+    if d.month > 7 or (d.month == 7 and d.day >= 16):
+        bs_start = d.year + 57
+    else:
+        bs_start = d.year + 56
+    bs_end_short = str(bs_start + 1)[-2:]
+    return f"{bs_start}/{bs_end_short}"
+
+
+@router.get("/fiscal-years")
+def get_fiscal_years(db: Session = Depends(get_db)):
+    today = date.today()
+    current_fy = get_fiscal_year_for_date(today)
+    current_bs_start = int(current_fy.split("/")[0])
+
+    fys = set()
+    for y in range(current_bs_start - 3, current_bs_start + 6):
+        fys.add(f"{y}/{str(y+1)[-2:]}")
+
+    entries = db.query(JournalEntry.entry_date).distinct().all()
+    for row in entries:
+        if row.entry_date:
+            fys.add(get_fiscal_year_for_date(row.entry_date))
+
+    return {
+        "current_fiscal_year": current_fy,
+        "fiscal_years": sorted(list(fys))
+    }
+
+
+def parse_fiscal_year(fy: str):
+    if not fy:
+        return None, None
+    fy = fy.strip()
+    if "/" in fy:
+        parts = fy.split("/")
+        try:
+            y1 = int(parts[0])
+            if y1 > 2050:
+                greg_start = y1 - 57
+                return date(greg_start, 7, 16), date(greg_start + 1, 7, 15)
+            else:
+                return date(y1, 7, 16), date(y1 + 1, 7, 15)
+        except Exception:
+            pass
+    elif fy.isdigit():
+        y = int(fy)
+        if y > 2050:
+            greg_start = y - 57
+            return date(greg_start, 7, 16), date(greg_start + 1, 7, 15)
+        else:
+            return date(y, 1, 1), date(y, 12, 31)
+    return None, None
+
+
+
 @router.get("/")
 def list_entries(
     skip: int = 0,
-    limit: int = 50,
+    limit: int = 100,
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
+    category: Optional[str] = Query(None),
+    fiscal_year: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     q = db.query(JournalEntry).order_by(JournalEntry.entry_date.desc(), JournalEntry.id.desc())
-    if start_date:
-        q = q.filter(JournalEntry.entry_date >= start_date)
-    if end_date:
-        q = q.filter(JournalEntry.entry_date <= end_date)
+
+    fy_start, fy_end = parse_fiscal_year(fiscal_year)
+    if fy_start and fy_end:
+        q = q.filter(JournalEntry.entry_date >= fy_start, JournalEntry.entry_date <= fy_end)
+    else:
+        if start_date:
+            q = q.filter(JournalEntry.entry_date >= start_date)
+        if end_date:
+            q = q.filter(JournalEntry.entry_date <= end_date)
+
+    if category and category.upper() != "ALL":
+        q = q.filter(JournalEntry.category == category.upper())
+
     entries = q.offset(skip).limit(limit).all()
     return [_serialize_entry(e) for e in entries]
 
@@ -247,6 +317,182 @@ def export_tax_clearance_csv(db: Session = Depends(get_db)):
     return response
 
 
+@router.get("/trial-balance")
+def get_trial_balance(
+    fiscal_year: Optional[str] = Query(None),
+    as_of_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Generates double-entry Trial Balance verifying Debit == Credit."""
+    accounts = db.query(AccountHead).order_by(AccountHead.code).all()
+    fy_start, fy_end = parse_fiscal_year(fiscal_year)
+
+    rows = []
+    total_debit = 0.0
+    total_credit = 0.0
+
+    for acc in accounts:
+        q = db.query(JournalLine).join(JournalEntry, JournalLine.entry_id == JournalEntry.id).filter(JournalLine.account_id == acc.id)
+        if fy_start and fy_end:
+            q = q.filter(JournalEntry.entry_date >= fy_start, JournalEntry.entry_date <= fy_end)
+        elif as_of_date:
+            q = q.filter(JournalEntry.entry_date <= as_of_date)
+
+        lines = q.all()
+        d_sum = sum(l.debit_npr for l in lines)
+        c_sum = sum(l.credit_npr for l in lines)
+        
+        # Calculate net debit / credit balance based on normal balance
+        if acc.normal_balance == "DEBIT":
+            net = d_sum - c_sum
+            debit_bal = max(0.0, net)
+            credit_bal = max(0.0, -net)
+        else:
+            net = c_sum - d_sum
+            credit_bal = max(0.0, net)
+            debit_bal = max(0.0, -net)
+
+        total_debit += debit_bal
+        total_credit += credit_bal
+
+        rows.append({
+            "account_id": acc.id,
+            "code": acc.code,
+            "name": acc.name,
+            "account_type": acc.account_type,
+            "normal_balance": acc.normal_balance,
+            "total_debit_npr": round(d_sum, 2),
+            "total_credit_npr": round(c_sum, 2),
+            "debit_balance_npr": round(debit_bal, 2),
+            "credit_balance_npr": round(credit_bal, 2),
+        })
+
+    return {
+        "as_of_date": as_of_date.strftime("%Y-%m-%d") if as_of_date else str(date.today()),
+        "fiscal_year": fiscal_year or "ALL",
+        "total_debit_npr": round(total_debit, 2),
+        "total_credit_npr": round(total_credit, 2),
+        "is_balanced": abs(total_debit - total_credit) < 0.01,
+        "rows": rows,
+    }
+
+
+@router.get("/balance-sheet")
+def get_balance_sheet(
+    fiscal_year: Optional[str] = Query(None),
+    as_of_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Generates official Corporate Balance Sheet (Assets = Liabilities + Equity)."""
+    ensure_default_account_heads(db)
+    tb = get_trial_balance(fiscal_year=fiscal_year, as_of_date=as_of_date, db=db)
+    
+    assets = []
+    liabilities = []
+    equity = []
+    
+    total_assets = 0.0
+    total_liabilities = 0.0
+    total_equity = 0.0
+
+    for r in tb["rows"]:
+        if r["account_type"] == "ASSET":
+            bal = r["debit_balance_npr"] - r["credit_balance_npr"]
+            assets.append({**r, "balance_npr": bal})
+            total_assets += bal
+        elif r["account_type"] == "LIABILITY":
+            bal = r["credit_balance_npr"] - r["debit_balance_npr"]
+            liabilities.append({**r, "balance_npr": bal})
+            total_liabilities += bal
+        elif r["account_type"] == "EQUITY":
+            bal = r["credit_balance_npr"] - r["debit_balance_npr"]
+            equity.append({**r, "balance_npr": bal})
+            total_equity += bal
+
+    # Net income from income - expenses
+    total_income = sum(r["credit_balance_npr"] - r["debit_balance_npr"] for r in tb["rows"] if r["account_type"] == "INCOME")
+    total_expense = sum(r["debit_balance_npr"] - r["credit_balance_npr"] for r in tb["rows"] if r["account_type"] == "EXPENSE")
+    current_period_profit = total_income - total_expense
+
+    total_equity_and_reserves = total_equity + current_period_profit
+
+    return {
+        "as_of_date": tb["as_of_date"],
+        "assets": assets,
+        "liabilities": liabilities,
+        "equity": equity,
+        "current_period_profit_npr": round(current_period_profit, 2),
+        "total_assets_npr": round(total_assets, 2),
+        "total_liabilities_npr": round(total_liabilities, 2),
+        "total_equity_npr": round(total_equity_and_reserves, 2),
+        "total_liabilities_and_equity_npr": round(total_liabilities + total_equity_and_reserves, 2),
+        "is_balanced": abs(total_assets - (total_liabilities + total_equity_and_reserves)) < 0.01,
+    }
+
+
+@router.get("/profit-loss")
+def get_profit_loss(
+    fiscal_year: Optional[str] = Query(None),
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    db: Session = Depends(get_db)
+):
+    """Generates Profit & Loss Statement (Income - COGS - Operating Expenses = Net Profit)."""
+    ensure_default_account_heads(db)
+    accounts = db.query(AccountHead).filter(AccountHead.account_type.in_(["INCOME", "EXPENSE"])).order_by(AccountHead.code).all()
+    fy_start, fy_end = parse_fiscal_year(fiscal_year)
+
+    income_items = []
+    cogs_items = []
+    expense_items = []
+
+    total_revenue = 0.0
+    total_cogs = 0.0
+    total_operating_expenses = 0.0
+
+    for acc in accounts:
+        q = db.query(JournalLine).join(JournalEntry, JournalLine.entry_id == JournalEntry.id).filter(JournalLine.account_id == acc.id)
+        if fy_start and fy_end:
+            q = q.filter(JournalEntry.entry_date >= fy_start, JournalEntry.entry_date <= fy_end)
+        else:
+            if start_date:
+                q = q.filter(JournalEntry.entry_date >= start_date)
+            if end_date:
+                q = q.filter(JournalEntry.entry_date <= end_date)
+
+        lines = q.all()
+        d_sum = sum(l.debit_npr for l in lines)
+        c_sum = sum(l.credit_npr for l in lines)
+
+        if acc.account_type == "INCOME":
+            net_income = round(c_sum - d_sum, 2)
+            income_items.append({"code": acc.code, "name": acc.name, "amount_npr": net_income})
+            total_revenue += net_income
+        elif acc.account_type == "EXPENSE":
+            net_exp = round(d_sum - c_sum, 2)
+            if acc.code == "5001":
+                cogs_items.append({"code": acc.code, "name": acc.name, "amount_npr": net_exp})
+                total_cogs += net_exp
+            else:
+                expense_items.append({"code": acc.code, "name": acc.name, "amount_npr": net_exp})
+                total_operating_expenses += net_exp
+
+    gross_profit = round(total_revenue - total_cogs, 2)
+    net_profit = round(gross_profit - total_operating_expenses, 2)
+
+    return {
+        "fiscal_year": fiscal_year or "ALL",
+        "income_items": income_items,
+        "cogs_items": cogs_items,
+        "operating_expense_items": expense_items,
+        "total_revenue_npr": round(total_revenue, 2),
+        "total_cogs_npr": round(total_cogs, 2),
+        "gross_profit_npr": gross_profit,
+        "total_operating_expenses_npr": round(total_operating_expenses, 2),
+        "net_profit_npr": net_profit,
+    }
+
+
 @router.get("/{entry_id}")
 def get_entry(entry_id: int, db: Session = Depends(get_db)):
     entry = db.query(JournalEntry).filter(JournalEntry.id == entry_id).first()
@@ -263,6 +509,7 @@ def create_entry(payload: JournalEntryCreate, db: Session = Depends(get_db)):
         entry_date=payload.entry_date,
         reference=payload.reference,
         narration=payload.narration,
+        category=payload.category or "GENERAL",
     )
     db.add(entry)
     db.flush()

@@ -4,7 +4,7 @@ from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional
 from app.database import get_db
-from app.models import Customer, JournalLine, JournalEntry
+from app.models import Customer, JournalLine, JournalEntry, BatterySerial, WarrantyClaim
 
 router = APIRouter()
 
@@ -16,6 +16,7 @@ class CustomerCreate(BaseModel):
     address: Optional[str] = None
     customer_type: str = "B2C"
     credit_limit: float = 0.0
+    pan_no: Optional[str] = None
 
 
 class CustomerUpdate(BaseModel):
@@ -25,6 +26,7 @@ class CustomerUpdate(BaseModel):
     address: Optional[str] = None
     customer_type: Optional[str] = None
     credit_limit: Optional[float] = None
+    pan_no: Optional[str] = None
 
 
 def get_customer_balance(db: Session, customer_id: int) -> float:
@@ -42,8 +44,8 @@ _customer_balance = get_customer_balance
 def auto_merge_duplicate_customers(db: Session):
     """
     Finds and merges duplicate customers sharing the same name (case-insensitive) or phone.
-    Re-assigns all JournalLine.customer_id references to the primary customer ID,
-    then removes duplicate customer records.
+    Re-assigns all JournalLine.customer_id, BatterySerial.customer_id, and WarrantyClaim.customer_id
+    references to the primary customer ID, then removes duplicate customer records.
     """
     customers = db.query(Customer).order_by(Customer.id.asc()).all()
     seen_by_name = {}
@@ -61,9 +63,15 @@ def auto_merge_duplicate_customers(db: Session):
             primary = seen_by_phone[norm_phone]
 
         if primary and primary.id != c.id:
-            # Reassign all journal lines from duplicate customer c.id to primary.id
+            # Reassign all foreign keys from duplicate customer c.id to primary.id
             db.query(JournalLine).filter(JournalLine.customer_id == c.id).update(
                 {JournalLine.customer_id: primary.id}, synchronize_session=False
+            )
+            db.query(BatterySerial).filter(BatterySerial.customer_id == c.id).update(
+                {BatterySerial.customer_id: primary.id}, synchronize_session=False
+            )
+            db.query(WarrantyClaim).filter(WarrantyClaim.customer_id == c.id).update(
+                {WarrantyClaim.customer_id: primary.id}, synchronize_session=False
             )
             duplicates_to_delete.append(c)
         else:
@@ -93,6 +101,7 @@ def list_customers(db: Session = Depends(get_db)):
             "address": c.address,
             "customer_type": c.customer_type,
             "credit_limit": c.credit_limit,
+            "pan_no": c.pan_no,
             "outstanding_balance_npr": _customer_balance(db, c.id),
             "created_at": c.created_at,
         }
@@ -113,6 +122,7 @@ def get_customer(customer_id: int, db: Session = Depends(get_db)):
         "address": c.address,
         "customer_type": c.customer_type,
         "credit_limit": c.credit_limit,
+        "pan_no": c.pan_no,
         "outstanding_balance_npr": _customer_balance(db, c.id),
         "created_at": c.created_at,
     }
@@ -166,6 +176,7 @@ def customer_ledger(customer_id: int, db: Session = Depends(get_db)):
             "address": c.address,
             "customer_type": c.customer_type,
             "credit_limit": c.credit_limit,
+            "pan_no": c.pan_no,
             "outstanding_balance_npr": get_customer_balance(db, c.id),
             "total_billed_npr": round(total_billed, 2),
             "total_paid_npr": round(total_paid, 2),
@@ -173,6 +184,12 @@ def customer_ledger(customer_id: int, db: Session = Depends(get_db)):
         },
         "ledger": rows
     }
+
+
+@router.get("/{customer_id}/statement")
+def customer_statement(customer_id: int, db: Session = Depends(get_db)):
+    """Customer Account Statement & Receivables Summary."""
+    return customer_ledger(customer_id, db)
 
 
 @router.post("/", status_code=201)
@@ -198,6 +215,8 @@ def create_customer(payload: CustomerCreate, db: Session = Depends(get_db)):
             existing.customer_type = payload.customer_type
         if payload.credit_limit > 0:
             existing.credit_limit = payload.credit_limit
+        if payload.pan_no and payload.pan_no.strip():
+            existing.pan_no = payload.pan_no.strip()
         db.commit()
         db.refresh(existing)
         return existing
@@ -228,3 +247,90 @@ def delete_customer(customer_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Customer not found")
     db.delete(c)
     db.commit()
+
+
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
+@router.get("/{customer_id}/ledger/export-csv")
+def export_customer_ledger_csv(customer_id: int, db: Session = Depends(get_db)):
+    """Export customer sales details and ledger as CSV file."""
+    c = db.query(Customer).filter(Customer.id == customer_id).first()
+    if not c:
+        raise HTTPException(status_code=404, detail="Customer not found")
+
+    lines = (
+        db.query(JournalLine)
+        .filter(JournalLine.customer_id == customer_id)
+        .join(JournalLine.entry)
+        .order_by(JournalLine.entry_id.asc(), JournalLine.id.asc())
+        .all()
+    )
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["CUSTOMER SALES & LEDGER STATEMENT"])
+    writer.writerow([f"Customer Name: {c.name}", f"Type: {c.customer_type}", f"PAN No: {c.pan_no or 'N/A'}"])
+    writer.writerow([f"Phone: {c.phone or 'N/A'}", f"Email: {c.email or 'N/A'}", f"Address: {c.address or 'N/A'}"])
+    writer.writerow([])
+    writer.writerow(["Line ID", "Entry ID", "Date", "Reference", "Narration", "Billed / Debit (NPR)", "Paid / Credit (NPR)", "Running Balance (NPR)"])
+
+    running_bal = 0.0
+    for line in lines:
+        change = line.debit_npr - line.credit_npr
+        running_bal += change
+        entry_date = line.entry.entry_date.strftime("%Y-%m-%d") if hasattr(line.entry.entry_date, "strftime") else str(line.entry.entry_date)
+        ref = line.entry.reference or f"INV-{line.entry_id:05d}"
+        narration = line.description or line.entry.narration or ""
+        writer.writerow([
+            line.id, line.entry_id, entry_date, ref, narration,
+            f"{line.debit_npr:.2f}", f"{line.credit_npr:.2f}", f"{running_bal:.2f}"
+        ])
+
+    writer.writerow([])
+    writer.writerow(["NET OUTSTANDING BALANCE", "", "", "", "", "", "", f"{running_bal:.2f}"])
+
+    output.seek(0)
+    filename = f"customer_{c.id}_sales_statement.csv"
+    response = StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv"
+    )
+    response.headers["Content-Disposition"] = f"attachment; filename={filename}"
+    return response
+
+
+@router.get("/export/all-sales-csv")
+def export_all_customer_sales_csv(db: Session = Depends(get_db)):
+    """Export summary of all customer sales and outstanding balances as CSV."""
+    customers = db.query(Customer).order_by(Customer.name).all()
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+
+    writer.writerow(["RENEW GEN ERP — CUSTOMER SALES SUMMARY REPORT"])
+    writer.writerow([])
+    writer.writerow(["Customer ID", "Name", "Customer Type", "PAN No", "Phone", "Email", "Address", "Credit Limit (NPR)", "Outstanding Balance (NPR)"])
+
+    total_receivable = 0.0
+    for c in customers:
+        bal = get_customer_balance(db, c.id)
+        total_receivable += bal
+        writer.writerow([
+            c.id, c.name, c.customer_type, c.pan_no or "", c.phone or "", c.email or "", c.address or "",
+            f"{c.credit_limit:.2f}", f"{bal:.2f}"
+        ])
+
+    writer.writerow([])
+    writer.writerow(["TOTAL RECEIVABLE", "", "", "", "", "", "", "", f"{total_receivable:.2f}"])
+
+    output.seek(0)
+    response = StreamingResponse(
+        io.BytesIO(output.getvalue().encode("utf-8")),
+        media_type="text/csv"
+    )
+    response.headers["Content-Disposition"] = "attachment; filename=all_customer_sales_summary.csv"
+    return response
+

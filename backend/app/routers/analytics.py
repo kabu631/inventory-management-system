@@ -9,7 +9,7 @@ from app.models import JournalEntry, JournalLine, AccountHead, Inventory, BankLo
 
 from app.services.auth import require_roles
 
-router = APIRouter(dependencies=[Depends(require_roles(["ADMIN"]))])
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN", "ACCOUNTANT", "STAFF"]))])
 
 
 def _get_sales_revenue_account_id(db: Session) -> int:
@@ -32,8 +32,15 @@ def _get_cogs_account_id(db: Session) -> int:
     return acc.id
 
 
+from typing import Optional
+from fastapi import Query
+from app.routers.journal import parse_fiscal_year
+
 @router.get("/")
-def analytics_overview(db: Session = Depends(get_db)):
+def analytics_overview(
+    fiscal_year: Optional[str] = Query(None),
+    db: Session = Depends(get_db)
+):
     # Auto-repair account heads if missing
     from app.routers.journal import ensure_default_account_heads
     ensure_default_account_heads(db)
@@ -41,21 +48,24 @@ def analytics_overview(db: Session = Depends(get_db)):
     sales_acc_id = _get_sales_revenue_account_id(db)
     cogs_acc_id = _get_cogs_account_id(db)
 
+    fy_start, fy_end = parse_fiscal_year(fiscal_year)
+
     # Aggregate monthly by joining JournalLine → JournalEntry
     monthly_data = {}
 
     # Revenue (credit side of sales account)
     if sales_acc_id:
-        revenue_rows = (
+        rev_q = (
             db.query(
                 JournalEntry.entry_date,
                 func.sum(JournalLine.credit_npr).label("revenue"),
             )
             .join(JournalLine, JournalEntry.id == JournalLine.entry_id)
             .filter(JournalLine.account_id == sales_acc_id)
-            .group_by(JournalEntry.entry_date)
-            .all()
         )
+        if fy_start and fy_end:
+            rev_q = rev_q.filter(JournalEntry.entry_date >= fy_start, JournalEntry.entry_date <= fy_end)
+        revenue_rows = rev_q.group_by(JournalEntry.entry_date).all()
         for row in revenue_rows:
             key = row.entry_date.strftime("%Y-%m")
             monthly_data.setdefault(key, {"month": key, "revenue_npr": 0, "cogs_npr": 0})
@@ -63,16 +73,17 @@ def analytics_overview(db: Session = Depends(get_db)):
 
     # COGS (debit side of COGS account)
     if cogs_acc_id:
-        cogs_rows = (
+        cogs_q = (
             db.query(
                 JournalEntry.entry_date,
                 func.sum(JournalLine.debit_npr).label("cogs"),
             )
             .join(JournalLine, JournalEntry.id == JournalLine.entry_id)
             .filter(JournalLine.account_id == cogs_acc_id)
-            .group_by(JournalEntry.entry_date)
-            .all()
         )
+        if fy_start and fy_end:
+            cogs_q = cogs_q.filter(JournalEntry.entry_date >= fy_start, JournalEntry.entry_date <= fy_end)
+        cogs_rows = cogs_q.group_by(JournalEntry.entry_date).all()
         for row in cogs_rows:
             key = row.entry_date.strftime("%Y-%m")
             monthly_data.setdefault(key, {"month": key, "revenue_npr": 0, "cogs_npr": 0})
@@ -129,17 +140,10 @@ def analytics_overview(db: Session = Depends(get_db)):
 
 @router.get("/forecast")
 def forecast_revenue(db: Session = Depends(get_db)):
-    """Linear regression forecast for next 3 months revenue."""
-    try:
-        import pandas as pd
-        from sklearn.linear_model import LinearRegression
-        import numpy as np
-    except ImportError:
-        return {"error": "pandas/scikit-learn not installed"}
-
+    """Pure-Python linear regression forecast for next 3 months revenue (zero external dependencies)."""
     sales_acc_id = _get_sales_revenue_account_id(db)
     if not sales_acc_id:
-        return {"historical": [], "forecast": []}
+        return {"historical": [], "forecast": [], "model": {"slope": 0.0, "intercept": 0.0}}
 
     rows = (
         db.query(
@@ -153,49 +157,68 @@ def forecast_revenue(db: Session = Depends(get_db)):
     )
 
     if not rows:
-        return {"historical": [], "forecast": []}
+        return {"historical": [], "forecast": [], "model": {"slope": 0.0, "intercept": 0.0}}
 
-    df = pd.DataFrame([{"date": r.entry_date, "revenue": float(r.revenue or 0)} for r in rows])
-    df["month"] = df["date"].apply(lambda d: d.strftime("%Y-%m"))
-    monthly = df.groupby("month")["revenue"].sum().reset_index().sort_values("month")
+    monthly_dict = {}
+    for r in rows:
+        if not r.entry_date:
+            continue
+        m_key = r.entry_date.strftime("%Y-%m")
+        monthly_dict[m_key] = monthly_dict.get(m_key, 0.0) + float(r.revenue or 0)
 
-    if len(monthly) < 3:
-        return {"historical": monthly.to_dict(orient="records"), "forecast": []}
+    # Sort months chronologically
+    sorted_months = sorted(monthly_dict.keys())
+    historical = [{"month": m, "revenue_npr": round(monthly_dict[m], 2)} for m in sorted_months]
 
-    monthly["t"] = range(len(monthly))
-    X = monthly[["t"]].values
-    y = monthly["revenue"].values
+    if len(historical) < 2:
+        return {
+            "historical": historical,
+            "forecast": [],
+            "model": {"slope": 0.0, "intercept": round(historical[0]["revenue_npr"], 2) if historical else 0.0}
+        }
 
-    model = LinearRegression()
-    model.fit(X, y)
+    # Least squares linear regression: y = slope * x + intercept
+    n = len(historical)
+    y_vals = [h["revenue_npr"] for h in historical]
+    sum_x = sum(i for i in range(n))
+    sum_y = sum(y_vals)
+    sum_xx = sum(i * i for i in range(n))
+    sum_xy = sum(i * y for i, y in enumerate(y_vals))
 
-    # Forecast next 3 months
-    last_t = monthly["t"].max()
-    last_month = monthly["month"].max()
-    last_date = date(int(last_month[:4]), int(last_month[5:7]), 1)
+    denom = (n * sum_xx - sum_x * sum_x)
+    if denom != 0:
+        slope = (n * sum_xy - sum_x * sum_y) / denom
+        intercept = (sum_y - slope * sum_x) / n
+    else:
+        slope = 0.0
+        intercept = sum_y / n if n > 0 else 0.0
+
+    # Project next 3 months
+    last_month_str = sorted_months[-1]
+    last_year = int(last_month_str[:4])
+    last_month = int(last_month_str[5:7])
 
     forecast = []
-    for i in range(1, 4):
-        fm = i
-        if last_date.month + fm <= 12:
-            fdate = date(last_date.year, last_date.month + fm, 1)
-        else:
-            extra = (last_date.month + fm - 1) // 12
-            fdate = date(last_date.year + extra, (last_date.month + fm - 1) % 12 + 1, 1)
-        predicted = max(float(model.predict([[last_t + i]])[0]), 0)
+    for step in range(1, 4):
+        pred_idx = (n - 1) + step
+        pred_revenue = max(0.0, slope * pred_idx + intercept)
+        
+        # Next calendar month
+        target_month_num = last_month + step
+        target_year = last_year + (target_month_num - 1) // 12
+        target_month_in_year = (target_month_num - 1) % 12 + 1
+        target_month_str = f"{target_year:04d}-{target_month_in_year:02d}"
+
         forecast.append({
-            "month": fdate.strftime("%Y-%m"),
-            "predicted_revenue_npr": round(predicted, 2),
+            "month": target_month_str,
+            "predicted_revenue_npr": round(pred_revenue, 2),
         })
 
     return {
-        "historical": [
-            {"month": row["month"], "revenue_npr": round(row["revenue"], 2)}
-            for _, row in monthly.iterrows()
-        ],
+        "historical": historical,
         "forecast": forecast,
         "model": {
-            "slope": round(float(model.coef_[0]), 2),
-            "intercept": round(float(model.intercept_), 2),
+            "slope": round(float(slope), 2),
+            "intercept": round(float(intercept), 2),
         },
     }

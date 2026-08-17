@@ -6,6 +6,7 @@ export function getAuthToken(): string | null {
 }
 
 async function req<T>(path: string, opts?: RequestInit): Promise<T> {
+  const isMutation = opts?.method && opts.method.toUpperCase() !== "GET";
   try {
     const token = getAuthToken();
     const res = await fetch(`${BASE}${path}`, {
@@ -16,30 +17,26 @@ async function req<T>(path: string, opts?: RequestInit): Promise<T> {
         ...opts?.headers,
       },
     });
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      if (res.status === 401 && typeof window !== "undefined") {
+      if (res.status === 401 && path.startsWith("/api/auth/") && typeof window !== "undefined") {
         sessionStorage.removeItem("rg_erp_user");
         sessionStorage.removeItem("rg_erp_token");
         localStorage.removeItem("rg_erp_user");
         localStorage.removeItem("rg_erp_token");
-        if (!window.location.pathname.includes("/login")) {
-          window.location.href = "/login";
-        }
       }
       throw new Error(err.detail || `HTTP ${res.status}`);
     }
     return await res.json();
   } catch (err: unknown) {
     console.warn(`[API Warning] Request to ${path} failed:`, err);
-    // For non-GET mutation requests (POST/PATCH/DELETE), rethrow for user alerts
-    if (opts?.method && opts.method.toUpperCase() !== "GET") {
-      if (err instanceof Error && err.message === "Failed to fetch") {
+    if (isMutation) {
+      if (err instanceof Error && (err.message === "Failed to fetch" || err.message.includes("NetworkError"))) {
         throw new Error("Unable to connect to backend server at http://127.0.0.1:8000. Please check backend process.");
       }
       throw err;
     }
-    // For GET page queries, return safe empty array fallback so Next.js never crashes with red error overlay
     return ([] as unknown) as T;
   }
 }

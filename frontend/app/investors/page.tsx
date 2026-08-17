@@ -95,17 +95,18 @@ export default function InvestorsPage() {
     setLoading(true);
     api.get<InvestorsApiResponse>("/api/investors/")
       .then((res) => {
-        setSummary(res.summary);
-        setInvestors(res.investors);
-        if (res.investors.length > 0 && selectedInvestorId === 0) {
-          setSelectedInvestorId(res.investors[0].id);
+        if (res && res.summary) setSummary(res.summary);
+        const list = Array.isArray(res?.investors) ? res.investors : (Array.isArray(res) ? (res as any) : []);
+        setInvestors(list);
+        if (list.length > 0) {
+          setSelectedInvestorId((prev) => (prev === 0 ? list[0].id : prev));
         }
       })
       .catch((err) => {
         setMsg({ text: `Failed to load investors: ${err.message}`, type: "error" });
       })
       .finally(() => setLoading(false));
-  }, [selectedInvestorId]);
+  }, []);
 
   useEffect(() => {
     loadData();
@@ -224,10 +225,11 @@ export default function InvestorsPage() {
     );
   }
 
-  const filteredInvestors = investors.filter((inv) =>
-    inv.name.toLowerCase().includes(search.toLowerCase()) ||
-    inv.email.toLowerCase().includes(search.toLowerCase()) ||
-    inv.phone.includes(search)
+  const safeInvestors = Array.isArray(investors) ? investors : [];
+  const filteredInvestors = safeInvestors.filter((inv) =>
+    inv.name?.toLowerCase().includes(search.toLowerCase()) ||
+    inv.email?.toLowerCase().includes(search.toLowerCase()) ||
+    (inv.phone && inv.phone.includes(search))
   );
 
   // Shared blur style for financial values
@@ -241,32 +243,32 @@ export default function InvestorsPage() {
     <div>
       {/* Header */}
       <div className="page-header">
-        <div>
+        <div className="page-header-info">
           <h1 className="page-title">Company Investors &amp; Capital Records</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
             Track Investor Capital Contributions &amp; Flexible Funding Records
           </p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem", alignItems: "center" }}>
+        <div className="page-actions">
           {/* Privacy toggle */}
           <button
             id="investor-privacy-toggle"
             onClick={openLockModal}
             title={unlocked ? "Click to lock investor financials" : "Click to reveal investor financials"}
             style={{
-              display: "flex", alignItems: "center", gap: "0.5rem",
-              padding: "0.5rem 1rem",
-              borderRadius: "0.625rem",
+              display: "flex", alignItems: "center", gap: "0.4rem",
+              padding: "0.45rem 0.85rem",
+              borderRadius: "0.5rem",
               border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
               background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
               color: unlocked ? "#22c55e" : "#ef4444",
               cursor: "pointer",
               fontWeight: 600,
-              fontSize: "0.8rem",
+              fontSize: "0.8125rem",
               transition: "all 0.2s ease",
             }}
           >
-            {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
+            {unlocked ? <Unlock size={14} /> : <Lock size={14} />}
             {unlocked ? "Lock Financials" : "Unlock Financials"}
           </button>
 
@@ -275,10 +277,10 @@ export default function InvestorsPage() {
             onClick={() => setShowAddInvestModal(true)}
             style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}
           >
-            <DollarSign size={16} /> Record Capital Investment
+            <DollarSign size={15} /> Record Capital
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddInvestorModal(true)}>
-            <Plus size={16} /> Add Investor
+            <Plus size={15} /> Add Investor
           </button>
         </div>
       </div>

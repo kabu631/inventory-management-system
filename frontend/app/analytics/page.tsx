@@ -60,27 +60,13 @@ function makeTooltip(isDark: boolean, unlocked: boolean) {
 export default function AnalyticsPage() {
   const { user } = useAuth();
   const { theme } = useTheme();
-  
-  if (user && user.role !== "ADMIN") {
-    return (
-      <div style={{ padding: "4rem", textAlign: "center" }}>
-        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
-          <ShieldAlert size={36} color="#ef4444" />
-        </div>
-        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Investor Access Required</h2>
-        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
-          Financial profit margins, revenue forecasting, and ML analytics are restricted strictly to company administrators and investors.
-        </p>
-        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
-      </div>
-    );
-  }
-
   const isDark = theme === "dark";
 
   const [analytics, setAnalytics] = useState<Analytics | null>(null);
   const [forecast, setForecast] = useState<ForecastData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedFiscalYear, setSelectedFiscalYear] = useState("ALL");
+  const [fiscalYearOptions, setFiscalYearOptions] = useState<string[]>([]);
 
   // ── privacy state
   const [unlocked, setUnlocked] = useState(false);
@@ -90,16 +76,52 @@ export default function AnalyticsPage() {
   const [showPin, setShowPin] = useState(false);
   const pinRef = useRef<HTMLInputElement>(null);
 
+  const isAuthorized = !user || user.role === "ADMIN" || user.role === "ACCOUNTANT";
+
   useEffect(() => {
+    if (isAuthorized) {
+      api.get<{ fiscal_years: string[] }>("/api/journal/fiscal-years")
+        .then(res => { if (res?.fiscal_years) setFiscalYearOptions(res.fiscal_years); })
+        .catch(() => {});
+    }
+  }, [isAuthorized]);
+
+  useEffect(() => {
+    if (!isAuthorized) {
+      setLoading(false);
+      return;
+    }
+    setLoading(true);
+    const url = selectedFiscalYear !== "ALL" ? `/api/analytics/?fiscal_year=${selectedFiscalYear}` : "/api/analytics/";
     Promise.all([
-      api.get<Analytics>("/api/analytics/"),
+      api.get<Analytics>(url),
       api.get<ForecastData>("/api/analytics/forecast"),
-    ]).then(([a, f]) => { setAnalytics(a); setForecast(f); }).finally(() => setLoading(false));
-  }, []);
+    ]).then(([a, f]) => {
+      setAnalytics(a && typeof a === "object" && !Array.isArray(a) ? a : null);
+      setForecast(f && typeof f === "object" && !Array.isArray(f) ? f : null);
+    }).catch(e => {
+      console.warn("Failed to load analytics:", e);
+    }).finally(() => setLoading(false));
+  }, [selectedFiscalYear, isAuthorized]);
 
   useEffect(() => {
     if (showPinModal) setTimeout(() => pinRef.current?.focus(), 80);
   }, [showPinModal]);
+
+  if (!isAuthorized) {
+    return (
+      <div style={{ padding: "4rem", textAlign: "center" }}>
+        <div style={{ display: "inline-flex", padding: "1rem", borderRadius: "50%", background: "rgba(239, 68, 68, 0.1)", marginBottom: "1rem" }}>
+          <ShieldAlert size={36} color="#ef4444" />
+        </div>
+        <h2 style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--text-primary)" }}>Admin &amp; Accountant Access Required</h2>
+        <p style={{ color: "var(--text-muted)", fontSize: "0.85rem", marginTop: "0.5rem", maxWidth: "420px", margin: "0.5rem auto 1.5rem" }}>
+          Financial profit margins, revenue forecasting, and analytics are restricted strictly to company administrators and accountants.
+        </p>
+        <Link href="/inventory" className="btn btn-primary">Go to Product Sales &amp; Catalog</Link>
+      </div>
+    );
+  }
 
   const TooltipComponent = makeTooltip(isDark, unlocked);
 
@@ -151,53 +173,50 @@ export default function AnalyticsPage() {
     <div>
       {/* Header */}
       <div className="page-header">
-        <div>
+        <div className="page-header-info">
           <h1 className="page-title">Analytics &amp; Forecast</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Revenue trends with ML-powered 3-month forecast</p>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>Revenue trends with ML-powered 3-month forecast</p>
         </div>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          {/* Trend badge */}
-          <div style={{
-            display: "flex", alignItems: "center", gap: "0.5rem",
-            background: slope >= 0 ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)",
-            border: `1px solid ${slope >= 0 ? "rgba(34,197,94,0.30)" : "rgba(239,68,68,0.30)"}`,
-            borderRadius: "0.625rem", padding: "0.5rem 0.875rem",
-          }}>
-            {slope >= 0 ? <TrendingUp size={16} color="#22c55e" /> : <TrendingDown size={16} color="#ef4444" />}
-            <span style={{
-              fontSize: "0.8rem",
-              color: slope >= 0 ? "#22c55e" : "#ef4444",
-              fontWeight: 500,
-              ...blurStyle(),
-            }}>
-              {slope >= 0 ? "Growing" : "Declining"} trend · {unlocked ? formatNPR(Math.abs(slope)) : "••••••"}/mo
-            </span>
+        <div className="page-actions">
+          <div style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}>
+            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 600 }}>Fiscal Year:</span>
+            <select
+              className="input"
+              style={{ minWidth: "120px", fontSize: "0.8rem", padding: "0.35rem 0.5rem" }}
+              value={selectedFiscalYear}
+              onChange={e => setSelectedFiscalYear(e.target.value)}
+              id="analytics-fy-select"
+            >
+              <option value="ALL">All Years</option>
+              {fiscalYearOptions.map(fy => (
+                <option key={fy} value={fy}>FY {fy}</option>
+              ))}
+            </select>
           </div>
 
-          {/* Privacy toggle */}
           <button
             id="analytics-privacy-toggle"
             onClick={openLockModal}
             title={unlocked ? "Click to lock financial data" : "Click to reveal financial data"}
             style={{
-              display: "flex", alignItems: "center", gap: "0.5rem",
-              padding: "0.5rem 1rem", borderRadius: "0.625rem",
+              display: "flex", alignItems: "center", gap: "0.4rem",
+              padding: "0.45rem 0.85rem", borderRadius: "0.5rem",
               border: `1px solid ${unlocked ? "rgba(34,197,94,0.4)" : "rgba(239,68,68,0.4)"}`,
               background: unlocked ? "rgba(34,197,94,0.08)" : "rgba(239,68,68,0.08)",
               color: unlocked ? "#22c55e" : "#ef4444",
-              cursor: "pointer", fontWeight: 600, fontSize: "0.8rem",
+              cursor: "pointer", fontWeight: 600, fontSize: "0.8125rem",
               transition: "all 0.2s ease",
             }}
           >
-            {unlocked ? <Unlock size={15} /> : <Lock size={15} />}
+            {unlocked ? <Unlock size={14} /> : <Lock size={14} />}
             {unlocked ? "Lock Financials" : "Unlock Financials"}
           </button>
         </div>
       </div>
 
       {/* KPI grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "2rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "2rem" }}>
         {[
           { label: "Total Revenue",  value: formatNPR(kpis.total_revenue_npr),      color: "#6366f1" },
           { label: "Total COGS",     value: formatNPR(kpis.total_cogs_npr),         color: "#f59e0b" },

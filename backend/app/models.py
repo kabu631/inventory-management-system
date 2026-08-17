@@ -14,11 +14,13 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(150), nullable=True)
     password_hash = Column(String(255), nullable=False)
     salt = Column(String(64), nullable=False)
-    role = Column(String(20), nullable=False, default="STAFF")  # ADMIN | STAFF
+    role = Column(String(20), nullable=False, default="STAFF")  # ADMIN | STAFF | ACCOUNTANT
     full_name = Column(String(100), nullable=False)
     staff_id = Column(String(50), nullable=False)
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 
 
@@ -65,6 +67,7 @@ class Customer(Base):
     address = Column(Text)
     customer_type = Column(String(10), default="B2C")  # B2B | B2C
     credit_limit = Column(Float, default=0.0)
+    pan_no = Column(String(50), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     journal_lines = relationship("JournalLine", back_populates="customer")
@@ -87,6 +90,7 @@ class Inventory(Base):
     stock_qty = Column(Integer, default=0)
     reorder_level = Column(Integer, default=5)
     warranty_months = Column(Integer, default=24) # Standard warranty (e.g. 24 months)
+    hs_code = Column(String(20), nullable=True)
     created_at = Column(DateTime, server_default=func.now())
 
     journal_lines = relationship("JournalLine", back_populates="inventory_item")
@@ -115,7 +119,7 @@ class BatterySerial(Base):
     customer = relationship("Customer")
 
 
-class WarrantyClaim(BaseModel := Base):
+class WarrantyClaim(Base):
     __tablename__ = "warranty_claims"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -208,6 +212,7 @@ class JournalEntry(Base):
     entry_date = Column(Date, nullable=False)
     reference = Column(String(100))
     narration = Column(Text)
+    category = Column(String(30), default="GENERAL")  # SALES | PURCHASE | PAYMENT | RECEIPT | EXPENSE | LOAN | INVESTMENT | GENERAL
     is_posted = Column(Boolean, default=True)
     created_at = Column(DateTime, server_default=func.now())
 

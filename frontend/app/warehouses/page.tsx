@@ -95,19 +95,19 @@ export default function WarehousesPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Multi-Warehouse & Stock Transfers</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Corporate Location Tracking, Central Depots & Inter-Warehouse Stock Movements</p>
+        <div className="page-header-info">
+          <h1 className="page-title">Multi-Warehouse &amp; Stock Transfers</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>Corporate Location Tracking, Central Depots &amp; Inter-Warehouse Stock Movements</p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div className="page-actions">
           {canTransfer && (
             <button className="btn btn-ghost" onClick={() => setShowTrfModal(true)} style={{ borderColor: "rgba(99,102,241,0.4)", color: "#818cf8" }}>
-              <ArrowRightLeft size={16} /> New Stock Transfer
+              <ArrowRightLeft size={15} /> New Stock Transfer
             </button>
           )}
           {isAdmin && (
             <button className="btn btn-primary" onClick={() => setShowAddWh(true)}>
-              <Plus size={16} /> Add Location
+              <Plus size={15} /> Add Location
             </button>
           )}
         </div>
@@ -120,7 +120,7 @@ export default function WarehousesPage() {
       )}
 
       {/* Warehouse Location Cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {warehouses.map(w => (
           <div key={w.id} className="kpi-card glow-indigo">
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>

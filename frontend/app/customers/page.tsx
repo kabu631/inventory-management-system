@@ -8,7 +8,7 @@ import { useAuth } from "@/contexts/AuthContext";
 
 interface Customer {
   id: number; name: string; phone: string; email: string; address?: string;
-  customer_type: "B2B" | "B2C"; credit_limit: number;
+  customer_type: "B2B" | "B2C"; credit_limit: number; pan_no?: string;
   outstanding_balance_npr: number;
 }
 
@@ -44,7 +44,7 @@ export default function CustomersPage() {
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<"ALL" | "B2B" | "B2C">("ALL");
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name:"", phone:"", email:"", address:"", customer_type:"B2C", credit_limit:"0" });
+  const [form, setForm] = useState({ name:"", phone:"", email:"", address:"", customer_type:"B2C", credit_limit:"0", pan_no:"" });
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
@@ -56,7 +56,8 @@ export default function CustomersPage() {
   const load = useCallback(() => {
     setLoading(true);
     api.get<Customer[]>("/api/customers/")
-      .then(setCustomers)
+      .then((data) => setCustomers(Array.isArray(data) ? data : []))
+      .catch((e) => console.warn("Failed to load customers:", e))
       .finally(() => setLoading(false));
   }, []);
 
@@ -77,12 +78,13 @@ export default function CustomersPage() {
     setLedgerData(null);
   };
 
-  const b2b = customers.filter(c => c.customer_type === "B2B");
-  const b2c = customers.filter(c => c.customer_type === "B2C");
-  const totalReceivable = customers.reduce((s, c) => s + c.outstanding_balance_npr, 0);
+  const safeCustomers = Array.isArray(customers) ? customers : [];
+  const b2b = safeCustomers.filter(c => c.customer_type === "B2B");
+  const b2c = safeCustomers.filter(c => c.customer_type === "B2C");
+  const totalReceivable = safeCustomers.reduce((s, c) => s + (Number(c.outstanding_balance_npr) || 0), 0);
 
-  const filtered = customers.filter(c => {
-    const matchesSearch = c.name.toLowerCase().includes(search.toLowerCase()) ||
+  const filtered = safeCustomers.filter(c => {
+    const matchesSearch = c.name?.toLowerCase().includes(search.toLowerCase()) ||
       (c.phone && c.phone.includes(search)) || (c.email && c.email.toLowerCase().includes(search.toLowerCase()));
     const matchesFilter = filter === "ALL" || c.customer_type === filter;
     return matchesSearch && matchesFilter;
@@ -96,7 +98,7 @@ export default function CustomersPage() {
     try {
       await api.post("/api/customers/", { ...form, credit_limit: Number(form.credit_limit) });
       setShowForm(false);
-      setForm({ name:"", phone:"", email:"", address:"", customer_type:"B2C", credit_limit:"0" });
+      setForm({ name:"", phone:"", email:"", address:"", customer_type:"B2C", credit_limit:"0", pan_no:"" });
       load();
     } catch(e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to add customer");
@@ -115,19 +117,29 @@ export default function CustomersPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Customers</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>B2B &amp; B2C customer ledgers and transaction history</p>
+        <div className="page-header-info">
+          <h1 className="page-title">Customers &amp; Accounts Receivable</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>B2B &amp; B2C customer ledgers, credit limits and transaction history</p>
         </div>
-        {canManageCustomers && (
-          <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-customer-btn">
-            <Plus size={16} /> Add Customer
+        <div className="page-actions">
+          <button
+            className="btn btn-ghost"
+            onClick={() => window.open("http://127.0.0.1:8000/api/customers/export/all-sales-csv", "_blank")}
+            style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}
+            id="download-all-cust-sales-csv-btn"
+          >
+            Export All Sales CSV
           </button>
-        )}
+          {canManageCustomers && (
+            <button className="btn btn-primary" onClick={() => setShowForm(true)} id="add-customer-btn">
+              <Plus size={15} /> Add Customer
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "1rem", marginBottom: "1.5rem" }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", marginBottom: "1.5rem" }}>
         {[
           { label: "Total Receivable",            value: formatNPR(totalReceivable) },
           { label: `B2B Customers (${b2b.length})`, value: `${b2b.length} businesses` },
@@ -166,6 +178,11 @@ export default function CustomersPage() {
               <input type="number" className="input" placeholder="0"
                 value={form.credit_limit} onChange={e => setForm(f => ({ ...f, credit_limit: e.target.value }))} id="cust-credit" />
             </div>
+            <div>
+              <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem" }}>PAN / VAT Number</label>
+              <input type="text" className="input" placeholder="e.g. 610123456"
+                value={form.pan_no} onChange={e => setForm(f => ({ ...f, pan_no: e.target.value }))} id="cust-pan" />
+            </div>
           </div>
           <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
             <button className="btn btn-ghost" onClick={() => setShowForm(false)}>Cancel</button>
@@ -194,62 +211,74 @@ export default function CustomersPage() {
         {loading ? (
           <div style={{ padding: "3rem", display: "flex", justifyContent: "center" }}><div className="spinner" /></div>
         ) : (
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Customer Name</th>
-                <th>Type</th>
-                <th>Phone / Contact</th>
-                <th style={{ textAlign: "right" }}>Credit Limit</th>
-                <th style={{ textAlign: "right" }}>Outstanding Balance</th>
-                <th style={{ textAlign: "center" }}>Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 ? (
+          <div style={{ overflowX: "auto", width: "100%" }}>
+            <table className="data-table">
+              <thead>
                 <tr>
-                  <td colSpan={6} style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
-                    No customers found. Click <strong>+ Add Customer</strong> to create one.
-                  </td>
+                  <th>Customer Name</th>
+                  <th>Type</th>
+                  <th>PAN / VAT No</th>
+                  <th>Phone / Contact</th>
+                  <th style={{ textAlign: "right" }}>Credit Limit</th>
+                  <th style={{ textAlign: "right" }}>Outstanding Balance</th>
+                  <th style={{ textAlign: "center" }}>Action</th>
                 </tr>
-              ) : (
-                filtered.map(c => (
-                  <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => openLedgerModal(c)}>
-                    <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "rgba(99,102,241,0.15)", color: "#818cf8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700 }}>
-                          {c.name.charAt(0).toUpperCase()}
-                        </div>
-                        {c.name}
-                      </div>
-                    </td>
-                    <td>
-                      <span className={`badge ${c.customer_type === "B2B" ? "badge-blue" : "badge-indigo"}`}>
-                        {c.customer_type}
-                      </span>
-                    </td>
-                    <td className="text-muted">{c.phone || "—"}</td>
-                    <td style={{ textAlign: "right" }} className="text-muted">
-                      {c.credit_limit > 0 ? formatNPR(c.credit_limit) : "—"}
-                    </td>
-                    <td style={{ textAlign: "right", fontWeight: 700, color: c.outstanding_balance_npr > 0 ? "#f59e0b" : "#22c55e" }}>
-                      {formatNPR(c.outstanding_balance_npr)}
-                    </td>
-                    <td style={{ textAlign: "center" }} onClick={e => e.stopPropagation()}>
-                      <button
-                        className="btn btn-ghost"
-                        onClick={() => openLedgerModal(c)}
-                        style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
-                        title="View complete transaction history for this customer"
-                      >
-                        View History →
-                      </button>
+              </thead>
+              <tbody>
+                {filtered.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} style={{ textAlign: "center", padding: "2rem", color: "var(--text-muted)" }}>
+                      No customers found. Click <strong>+ Add Customer</strong> to create one.
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : (
+                  filtered.map(c => (
+                    <tr key={c.id} style={{ cursor: "pointer" }} onClick={() => openLedgerModal(c)}>
+                      <td style={{ fontWeight: 600, color: "var(--text-primary)" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          <div style={{ width: "24px", height: "24px", borderRadius: "50%", background: "rgba(99,102,241,0.15)", color: "#818cf8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", fontWeight: 700 }}>
+                            {c.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div>{c.name}</div>
+                            {c.address && <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", fontWeight: 400 }}>{c.address}</div>}
+                          </div>
+                        </div>
+                      </td>
+                      <td>
+                        <span className={`badge ${c.customer_type === "B2B" ? "badge-blue" : "badge-indigo"}`}>
+                          {c.customer_type}
+                        </span>
+                      </td>
+                      <td style={{ fontFamily: "monospace", fontSize: "0.8rem", color: c.pan_no ? "var(--text-secondary)" : "var(--text-muted)" }}>
+                        {c.pan_no || "—"}
+                      </td>
+                      <td style={{ fontSize: "0.82rem" }}>
+                        <div>{c.phone || "—"}</div>
+                        {c.email && <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{c.email}</div>}
+                      </td>
+                      <td style={{ textAlign: "right", color: "var(--text-muted)" }}>
+                        {c.credit_limit > 0 ? formatNPR(c.credit_limit) : "—"}
+                      </td>
+                      <td style={{ textAlign: "right", fontWeight: 700, color: c.outstanding_balance_npr > 0 ? "#ef4444" : "#22c55e" }}>
+                        {formatNPR(c.outstanding_balance_npr)}
+                      </td>
+                      <td style={{ textAlign: "center" }}>
+                        <button
+                          className="btn btn-ghost"
+                          onClick={() => openLedgerModal(c)}
+                          style={{ fontSize: "0.75rem", padding: "0.25rem 0.6rem" }}
+                          title="View complete transaction history for this customer"
+                        >
+                          View History →
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
 
@@ -281,7 +310,7 @@ export default function CustomersPage() {
                     </span>
                   </div>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
-                    Phone: {selectedCustomer.phone || "N/A"} · Address: {selectedCustomer.address || "Nepal"}
+                    PAN: {selectedCustomer.pan_no || "N/A"} · Phone: {selectedCustomer.phone || "N/A"} · Address: {selectedCustomer.address || "Nepal"}
                   </p>
                 </div>
               </div>
@@ -384,7 +413,15 @@ export default function CustomersPage() {
             </div>
 
             {/* Footer */}
-            <div style={{ display: "flex", justifyContent: "flex-end", padding: "1rem 1.75rem", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "1rem 1.75rem", borderTop: "1px solid var(--border)", flexShrink: 0 }}>
+              <button
+                className="btn btn-ghost"
+                onClick={() => window.open(`http://127.0.0.1:8000/api/customers/${selectedCustomer.id}/ledger/export-csv`, "_blank")}
+                style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}
+                id="export-cust-ledger-csv-btn"
+              >
+                📥 Download Statement CSV
+              </button>
               <button className="btn btn-ghost" onClick={closeLedgerModal}>Close</button>
             </div>
           </div>

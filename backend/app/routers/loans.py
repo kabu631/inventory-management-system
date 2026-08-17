@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models import BankLoan, LoanRepayment, JournalEntry, JournalLine, AccountHead
 from app.services.auth import require_roles
 
-router = APIRouter(dependencies=[Depends(require_roles(["ADMIN"]))])
+router = APIRouter(dependencies=[Depends(require_roles(["ADMIN", "ACCOUNTANT"]))])
 
 
 # ---------------------------------------------------------------------------

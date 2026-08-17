@@ -1,17 +1,18 @@
 [tool.pyright]
 extraPaths = [
-    "C:/Users/kabin/OneDrive/Desktop/erp/Lib/site-packages",
-    "C:/Users/kabin/OneDrive/Desktop/erp/backend"
+    "./backend/venv/Lib/site-packages",
+    "./backend",
+    "C:/Users/kabin/OneDrive/Desktop/All Projects/erp/backend/venv/Lib/site-packages",
+    "C:/Users/kabin/OneDrive/Desktop/All Projects/erp/backend"
 ]
 exclude = [
-    "**/*_pyrefly_virtual_*/**"
-]
-ignore = [
-    "**/*_pyrefly_virtual_*/**"
+    "**/node_modules",
+    "**/.next",
+    "**/venv"
 ]
 
 [tool.pytest.ini_options]
 pythonpath = [
-    "C:/Users/kabin/OneDrive/Desktop/erp/Lib/site-packages",
-    "C:/Users/kabin/OneDrive/Desktop/erp/backend"
+    "./backend/venv/Lib/site-packages",
+    "./backend"
 ]

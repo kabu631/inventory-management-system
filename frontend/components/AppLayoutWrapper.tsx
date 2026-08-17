@@ -15,8 +15,10 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
 
   if (loading) {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", background: "var(--bg-root)" }}>
-        <div className="spinner" />
+      <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-root)" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", flex: 1, minHeight: "100vh" }}>
+          <div className="spinner" />
+        </div>
       </div>
     );
   }
@@ -26,14 +28,19 @@ export default function AppLayoutWrapper({ children }: { children: React.ReactNo
   }
 
   return (
-    <div style={{ display: "flex", minHeight: "100vh" }}>
+    <div style={{ display: "flex", minHeight: "100vh", width: "100%", overflowX: "hidden" }}>
       <Sidebar />
       <main
         style={{
           flex: 1,
           marginLeft: "16rem",
-          padding: "2rem",
-          overflow: "auto",
+          padding: "1.75rem 2rem",
+          minWidth: 0,
+          maxWidth: "calc(100vw - 16rem)",
+          width: "calc(100vw - 16rem)",
+          boxSizing: "border-box",
+          overflowY: "auto",
+          overflowX: "hidden",
           background: "var(--bg-root)",
           minHeight: "100vh",
           transition: "background 0.25s ease",

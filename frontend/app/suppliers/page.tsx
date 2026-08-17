@@ -107,16 +107,16 @@ export default function SuppliersPage() {
   return (
     <div>
       <div className="page-header">
-        <div>
-          <h1 className="page-title">Suppliers & Purchase Orders (PO)</h1>
-          <p className="text-muted" style={{ fontSize: "0.875rem" }}>Vendor Directory, Bulk Stock Orders & Accounts Payable Management</p>
+        <div className="page-header-info">
+          <h1 className="page-title">Suppliers &amp; Purchase Orders (PO)</h1>
+          <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>Vendor Directory, Bulk Stock Orders &amp; Accounts Payable Management</p>
         </div>
-        <div style={{ display: "flex", gap: "0.75rem" }}>
+        <div className="page-actions">
           <button className="btn btn-ghost" onClick={() => setShowPoModal(true)} style={{ borderColor: "rgba(34,197,94,0.4)", color: "#22c55e" }}>
-            <ShoppingCart size={16} /> New Purchase Order
+            <ShoppingCart size={15} /> New Purchase Order
           </button>
           <button className="btn btn-primary" onClick={() => setShowAddSup(true)}>
-            <Plus size={16} /> Add Supplier
+            <Plus size={15} /> Add Supplier
           </button>
         </div>
       </div>

@@ -23,10 +23,12 @@ interface InvoiceData {
     email: string;
     address: string;
     customer_type: string;
+    pan_no?: string;
   };
   lines: Array<{
     account_code: string;
     account_name: string;
+    hs_code?: string;
     debit_npr: number;
     credit_npr: number;
     description: string;
@@ -121,6 +123,9 @@ function InvoiceContent() {
             <p style={{ fontSize: "1rem", fontWeight: 700, color: "#0f172a", marginTop: "2px" }}>{data.customer.name}</p>
             <p style={{ fontSize: "0.8rem", color: "#475569" }}>Address: {data.customer.address}</p>
             <p style={{ fontSize: "0.8rem", color: "#475569" }}>Phone: {data.customer.phone}</p>
+            <p style={{ fontSize: "0.8rem", fontWeight: 700, color: "#0369a1", marginTop: "2px" }}>
+              Buyer PAN / VAT No: {data.customer.pan_no || "N/A"}
+            </p>
           </div>
           <div style={{ textAlign: "right" }}>
             <p style={{ fontSize: "0.7rem", color: "#64748b", textTransform: "uppercase", fontWeight: 700, letterSpacing: "0.05em" }}>Transaction Summary</p>
@@ -136,6 +141,7 @@ function InvoiceContent() {
           <thead>
             <tr style={{ background: "#1e1b4b", color: "#ffffff", textAlign: "left", fontSize: "0.8rem", textTransform: "uppercase" }}>
               <th style={{ padding: "0.625rem 0.875rem" }}>Account Code</th>
+              <th style={{ padding: "0.625rem 0.875rem" }}>HS Code</th>
               <th style={{ padding: "0.625rem 0.875rem" }}>Description / Account Name</th>
               <th style={{ padding: "0.625rem 0.875rem", textAlign: "right" }}>Debit (NPR)</th>
               <th style={{ padding: "0.625rem 0.875rem", textAlign: "right" }}>Credit (NPR)</th>
@@ -145,6 +151,7 @@ function InvoiceContent() {
             {data.lines.filter(l => !["5001", "1004"].includes(l.account_code)).map((l, idx) => (
               <tr key={idx} style={{ borderBottom: "1px solid #e2e8f0", fontSize: "0.85rem", background: idx % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                 <td style={{ padding: "0.625rem 0.875rem", fontFamily: "monospace", fontWeight: 700, color: "#4338ca" }}>{l.account_code}</td>
+                <td style={{ padding: "0.625rem 0.875rem", fontFamily: "monospace", fontWeight: 600, color: "#047857" }}>{l.hs_code || "—"}</td>
                 <td style={{ padding: "0.625rem 0.875rem" }}>
                   <div style={{ fontWeight: 600 }}>{l.account_name}</div>
                   {l.description && <div style={{ fontSize: "0.75rem", color: "#64748b" }}>{l.description}</div>}

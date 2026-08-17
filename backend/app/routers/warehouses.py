@@ -26,13 +26,22 @@ class StockTransferCreate(BaseModel):
     notes: Optional[str] = None
 
 
+def ensure_default_warehouses(db: Session):
+    """Ensures primary Central Warehouse exists."""
+    if not db.query(Warehouse).first():
+        wh = Warehouse(
+            code="WH-KTM-01",
+            name="Central Warehouse (Kathmandu Primary Depot)",
+            location="Kathmandu, Nepal",
+            is_primary=True,
+        )
+        db.add(wh)
+        db.commit()
+
+
 @router.get("/")
 def list_warehouses(db: Session = Depends(get_db)):
-    # Auto-seed primary warehouse if empty
-    if db.query(Warehouse).count() == 0:
-        w1 = Warehouse(code="KTM-WH-01", name="Kathmandu Central Warehouse", location="Kathmandu Depot", is_primary=True)
-        db.add(w1)
-        db.commit()
+    ensure_default_warehouses(db)
     return db.query(Warehouse).order_by(Warehouse.id).all()
 
 
