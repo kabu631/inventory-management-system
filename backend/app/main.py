@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import init_db
 from app.services.backup import trigger_auto_backup
-from app.routers import inventory, customers, journal, loans, analytics, backup, warehouses, serials, suppliers, auth, investors
+from app.routers import inventory, customers, journal, loans, analytics, backup, warehouses, serials, suppliers, auth, investors, company
 
 
 async def periodic_backup_task(interval_seconds: int = 1800):
@@ -24,15 +24,17 @@ async def periodic_backup_task(interval_seconds: int = 1800):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: create tables & seed default users / investors if empty
+    # Startup: create tables & seed default users / investors / company profile if empty
     from app.database import SessionLocal
     from app.routers.auth import ensure_default_users
     from app.routers.investors import ensure_default_investors
     from app.routers.journal import ensure_default_account_heads
     from app.routers.warehouses import ensure_default_warehouses
+    from app.routers.company import ensure_default_company_settings
     init_db()
     db = SessionLocal()
     try:
+        ensure_default_company_settings(db)
         ensure_default_account_heads(db)
         ensure_default_users(db)
         ensure_default_investors(db)
@@ -65,6 +67,7 @@ app.add_middleware(
 )
 
 app.include_router(auth.router, prefix="/api/auth", tags=["Auth"])
+app.include_router(company.router, prefix="/api/company", tags=["Company Profile & Branding"])
 app.include_router(investors.router, prefix="/api/investors", tags=["Investors & Capital"])
 app.include_router(inventory.router, prefix="/api/inventory", tags=["Inventory"])
 app.include_router(customers.router, prefix="/api/customers", tags=["Customers"])

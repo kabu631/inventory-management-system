@@ -82,9 +82,12 @@ class Inventory(Base):
     id = Column(Integer, primary_key=True, index=True)
     sku = Column(String(50), unique=True, nullable=False)
     name = Column(String(200), nullable=False)
+    category = Column(String(100), nullable=True)     # Any product category (e.g. Energy, Electronics, Hardware, Apparel, etc.)
     brand = Column(String(100))
-    capacity_ah = Column(Float)       # Amp-hours
-    voltage_v = Column(Float)         # Volts
+    unit_of_measure = Column(String(50), default="pcs") # pcs, units, box, kg, meters, sets, etc.
+    specifications = Column(Text, nullable=True)       # Free-text specification or technical details
+    capacity_ah = Column(Float, nullable=True)        # Optional spec (e.g. Amp-hours if applicable)
+    voltage_v = Column(Float, nullable=True)          # Optional spec (e.g. Volts if applicable)
     import_cost_npr = Column(Float, default=0.0)   # Cost per unit (NPR)
     selling_price_npr = Column(Float, default=0.0) # Selling price (NPR)
     stock_qty = Column(Integer, default=0)
@@ -305,3 +308,35 @@ class InvestmentRecord(Base):
     created_at = Column(DateTime, server_default=func.now())
 
     investor = relationship("Investor", back_populates="investments")
+
+
+# ---------------------------------------------------------------------------
+# Company Profile & System Branding
+# ---------------------------------------------------------------------------
+class CompanySetting(Base):
+    __tablename__ = "company_settings"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(255), nullable=False, default="Renew Gen Resources")
+    tagline = Column(String(255), default="Corporate Commercial & Supply Chain Management")
+    business_type = Column(String(150), default="Commercial Trading & Distribution") # Any industry/business line written as text
+    product_term = Column(String(50), default="Product")                             # Singular item term (e.g., Product, Item, Battery, Unit)
+    product_term_plural = Column(String(50), default="Products")                     # Plural item term (e.g., Products, Items, Batteries, Units)
+    pan_vat_no = Column(String(50), default="610464122")
+    phone = Column(String(100), default="+977 01-4573200")
+    email = Column(String(150), default="info@renewgenresources.com")
+    address = Column(Text, default="Babarmahal, Kathmandu, Nepal")
+    website = Column(String(255), default="www.renewgenresources.com")
+    logo_data = Column(Text, nullable=True)  # Base64 data URL or asset path
+    terms_and_conditions = Column(
+        Text,
+        default="1. Goods once sold are not returnable without authorization.\n2. Warranty claims require original tax invoice & intact serial number.\n3. Payment is due as per agreed invoice credit terms.\n4. Subject to local jurisdiction."
+    )
+    invoice_footer = Column(
+        Text,
+        default="Thank you for your business! This is a computer-generated tax invoice."
+    )
+    currency_symbol = Column(String(20), default="NPR")
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, onupdate=func.now(), server_default=func.now())
+

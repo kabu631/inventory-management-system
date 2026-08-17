@@ -3,8 +3,13 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional
+from datetime import date
+import io
+import csv
+from fastapi.responses import StreamingResponse
 from app.database import get_db
 from app.models import Customer, JournalLine, JournalEntry, BatterySerial, WarrantyClaim
+from app.routers.company import get_company_dict
 
 router = APIRouter()
 
@@ -305,12 +310,17 @@ def export_customer_ledger_csv(customer_id: int, db: Session = Depends(get_db)):
 @router.get("/export/all-sales-csv")
 def export_all_customer_sales_csv(db: Session = Depends(get_db)):
     """Export summary of all customer sales and outstanding balances as CSV."""
+    comp = get_company_dict(db)
+    comp_name = comp.get("company_name", "COMPANY").upper()
+    comp_pan = comp.get("pan_vat_no", "N/A")
+
     customers = db.query(Customer).order_by(Customer.name).all()
 
     output = io.StringIO()
     writer = csv.writer(output)
 
-    writer.writerow(["RENEW GEN ERP — CUSTOMER SALES SUMMARY REPORT"])
+    writer.writerow([f"{comp_name} — CUSTOMER SALES SUMMARY REPORT"])
+    writer.writerow([f"Generated Date: {date.today().strftime('%Y-%m-%d')}", f"Company PAN / VAT: {comp_pan}"])
     writer.writerow([])
     writer.writerow(["Customer ID", "Name", "Customer Type", "PAN No", "Phone", "Email", "Address", "Credit Limit (NPR)", "Outstanding Balance (NPR)"])
 
@@ -331,6 +341,7 @@ def export_all_customer_sales_csv(db: Session = Depends(get_db)):
         io.BytesIO(output.getvalue().encode("utf-8")),
         media_type="text/csv"
     )
-    response.headers["Content-Disposition"] = "attachment; filename=all_customer_sales_summary.csv"
+    safe_filename = comp_name.lower().replace(" ", "_")[:20]
+    response.headers["Content-Disposition"] = f"attachment; filename={safe_filename}_customer_sales_summary.csv"
     return response
 

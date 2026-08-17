@@ -2,7 +2,7 @@
 import { useEffect, useState, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { api, formatNPR, formatDate } from "@/lib/api";
-import { Printer, ArrowLeft, Zap } from "lucide-react";
+import { Printer, ArrowLeft, Building2 } from "lucide-react";
 import Link from "next/link";
 
 interface InvoiceData {
@@ -12,10 +12,15 @@ interface InvoiceData {
   total_amount_npr: number;
   company_info: {
     name: string;
+    company_name?: string;
     pan_vat_no: string;
     address: string;
     phone: string;
     email: string;
+    website?: string;
+    logo_data?: string;
+    terms_and_conditions?: string;
+    invoice_footer?: string;
   };
   customer: {
     name: string;
@@ -69,8 +74,13 @@ function InvoiceContent() {
     );
   }
 
+  const companyName = data.company_info.company_name || data.company_info.name || "Corporate Enterprise";
+  const logoSrc = data.company_info.logo_data || "/logo.png";
+  const termsText = data.company_info.terms_and_conditions || "1. Goods once sold are not returnable without authorization.\n2. Warranty claims require original tax invoice.\n3. Subject to local jurisdiction.";
+  const footerNote = data.company_info.invoice_footer || "Thank you for your business! This is a computer-generated tax invoice.";
+
   return (
-    <div className="invoice-container" style={{ maxWidth: "800px", margin: "0 auto", padding: "1rem" }}>
+    <div className="invoice-container" style={{ maxWidth: "840px", margin: "0 auto", padding: "1rem" }}>
       {/* Action Header (Hidden when printing) */}
       <div className="no-print" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.5rem" }}>
         <Link href="/journal" className="btn btn-ghost">
@@ -96,17 +106,37 @@ function InvoiceContent() {
       >
         {/* Company Letterhead */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", borderBottom: "2px solid #0369a1", paddingBottom: "1.25rem", marginBottom: "1.5rem" }}>
-          <div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/logo.png" alt={data.company_info.name} style={{ height: "60px", objectFit: "contain", marginBottom: "0.5rem" }} />
-            <p style={{ fontSize: "0.8rem", color: "#475569" }}>{data.company_info.address}</p>
-            <p style={{ fontSize: "0.8rem", color: "#475569" }}>Phone: {data.company_info.phone} · Email: {data.company_info.email}</p>
-            <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0369a1", marginTop: "4px" }}>
-              PAN / VAT REGISTRATION NO: {data.company_info.pan_vat_no}
+          <div style={{ maxWidth: "60%" }}>
+            {logoSrc ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={logoSrc}
+                alt={companyName}
+                style={{ maxHeight: "56px", maxWidth: "220px", objectFit: "contain", marginBottom: "0.5rem", display: "block" }}
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+                <Building2 size={28} color="#0369a1" />
+                <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0f172a", margin: 0 }}>{companyName}</h1>
+              </div>
+            )}
+            <h3 style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a", margin: "0 0 2px 0" }}>{companyName}</h3>
+            <p style={{ fontSize: "0.8rem", color: "#475569", margin: "1px 0" }}>{data.company_info.address}</p>
+            <p style={{ fontSize: "0.8rem", color: "#475569", margin: "1px 0" }}>
+              Phone: {data.company_info.phone} {data.company_info.email ? `· Email: ${data.company_info.email}` : ""}
+            </p>
+            {data.company_info.website && (
+              <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "1px 0" }}>Web: {data.company_info.website}</p>
+            )}
+            <p style={{ fontSize: "0.85rem", fontWeight: 800, color: "#0369a1", marginTop: "6px" }}>
+              PAN / VAT REGISTRATION NO: {data.company_info.pan_vat_no || "N/A"}
             </p>
           </div>
           <div style={{ textAlign: "right" }}>
-            <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0284c7", textTransform: "uppercase" }}>
+            <h2 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#0284c7", textTransform: "uppercase", margin: 0 }}>
               TAX INVOICE
             </h2>
             <p style={{ fontSize: "0.85rem", fontWeight: 700, color: "#0f172a", marginTop: "4px" }}>
@@ -167,13 +197,20 @@ function InvoiceContent() {
           </tbody>
         </table>
 
-        {/* Invoice Total & Signatures */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "2rem", paddingTop: "1rem", borderTop: "2px solid #e2e8f0" }}>
-          <div>
-            <p style={{ fontSize: "0.75rem", color: "#64748b" }}>Thank you for your business!</p>
-            <p style={{ fontSize: "0.75rem", color: "#64748b", marginTop: "2px", fontWeight: 500 }}>This is not applicable for official vat/tax purpose.</p>
+        {/* Invoice Total & Summary */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginTop: "1rem", paddingTop: "1rem", borderTop: "2px solid #e2e8f0" }}>
+          <div style={{ maxWidth: "55%" }}>
+            <p style={{ fontSize: "0.75rem", fontWeight: 700, color: "#334155", textTransform: "uppercase", letterSpacing: "0.04em", marginBottom: "0.25rem" }}>
+              Terms &amp; Conditions
+            </p>
+            <div style={{ fontSize: "0.72rem", color: "#64748b", lineHeight: 1.45, whiteSpace: "pre-line", background: "#f8fafc", padding: "0.5rem 0.75rem", borderRadius: "0.375rem", border: "1px solid #e2e8f0" }}>
+              {termsText}
+            </div>
+            <p style={{ fontSize: "0.72rem", color: "#475569", marginTop: "0.5rem", fontWeight: 500 }}>
+              {footerNote}
+            </p>
           </div>
-          <div style={{ textAlign: "right" }}>
+          <div style={{ textAlign: "right", minWidth: "220px" }}>
             <p style={{ fontSize: "0.8rem", color: "#64748b", textTransform: "uppercase", fontWeight: 600 }}>Total Invoice Amount</p>
             <p style={{ fontSize: "1.5rem", fontWeight: 800, color: "#4338ca", marginTop: "2px" }}>{formatNPR(data.total_amount_npr)}</p>
             <div style={{ marginTop: "2rem", borderTop: "1px dashed #cbd5e1", paddingTop: "0.5rem", minWidth: "200px" }}>

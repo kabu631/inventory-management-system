@@ -1,11 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
+from datetime import date
+import csv
+import io
+from fastapi.responses import StreamingResponse
+
 from app.database import get_db
-from app.models import Inventory, User
+from app.models import Inventory, User, Customer, AccountHead, JournalEntry, JournalLine
 from app.routers.customers import get_customer_balance
+from app.routers.company import get_company_dict
 from app.services.auth import require_roles
+from app.services.backup import trigger_auto_backup
 
 router = APIRouter()
 
@@ -13,7 +20,10 @@ router = APIRouter()
 class InventoryCreate(BaseModel):
     sku: str
     name: str
+    category: Optional[str] = None
     brand: Optional[str] = None
+    unit_of_measure: Optional[str] = "pcs"
+    specifications: Optional[str] = None
     capacity_ah: Optional[float] = None
     voltage_v: Optional[float] = None
     import_cost_npr: float = 0.0
@@ -25,7 +35,10 @@ class InventoryCreate(BaseModel):
 
 class InventoryUpdate(BaseModel):
     name: Optional[str] = None
+    category: Optional[str] = None
     brand: Optional[str] = None
+    unit_of_measure: Optional[str] = None
+    specifications: Optional[str] = None
     capacity_ah: Optional[float] = None
     voltage_v: Optional[float] = None
     import_cost_npr: Optional[float] = None
@@ -43,7 +56,10 @@ def list_inventory(db: Session = Depends(get_db)):
             "id": i.id,
             "sku": i.sku,
             "name": i.name,
-            "brand": i.brand,
+            "category": i.category or "General",
+            "brand": i.brand or "—",
+            "unit_of_measure": i.unit_of_measure or "pcs",
+            "specifications": i.specifications or (f"{i.voltage_v}V / {i.capacity_ah}Ah" if (i.voltage_v or i.capacity_ah) else "—"),
             "capacity_ah": i.capacity_ah,
             "voltage_v": i.voltage_v,
             "import_cost_npr": i.import_cost_npr,
@@ -97,12 +113,6 @@ def update_inventory(
     db.commit()
     db.refresh(item)
     return item
-
-
-from datetime import date
-from typing import List
-from app.models import Customer, AccountHead, JournalEntry, JournalLine
-from app.services.backup import trigger_auto_backup
 
 
 class SaleItemIn(BaseModel):
@@ -436,7 +446,6 @@ def create_inventory_purchase(
 @router.get("/invoices/journal-entry/{entry_id}")
 def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
     """Retrieve tax invoice details for printable customer letterhead view (excluding internal COGS/inventory cost lines)."""
-    from app.models import JournalEntry
     entry = db.query(JournalEntry).filter(JournalEntry.id == entry_id).first()
     if not entry:
         raise HTTPException(status_code=404, detail="Invoice record not found")
@@ -487,13 +496,7 @@ def get_printable_invoice(entry_id: int, db: Session = Depends(get_db)):
         "invoice_date": entry.entry_date.strftime("%Y-%m-%d"),
         "narration": entry.narration,
         "total_amount_npr": total_invoice_amount,
-        "company_info": {
-            "name": "Renew Gen Resources",
-            "pan_vat_no": "610464122",
-            "address": "Babarmahal Kathmandu",
-            "phone": "+977 01-4573200",
-            "email": "info@renewgenresources.com",
-        },
+        "company_info": get_company_dict(db),
         "customer": customer_info or {"name": "Cash / Walk-in Customer", "address": "Kathmandu, Nepal", "phone": "—"},
         "lines": lines_detail,
     }
@@ -528,58 +531,45 @@ def get_inventory_movements(
     movements = []
     for line in lines:
         entry = line.entry
-        item = line.inventory_item
-        # Account code 1004 is Inventory account
-        # Debit to 1004 = Stock IN (Purchase)
-        # Credit to 1004 = Stock OUT (Sale / COGS reduction)
-        movement_type = "IN" if line.debit_npr > 0 else "OUT"
-        qty = 0
-        
-        # Parse quantity from line description or entry narration if possible
-        desc = line.description or entry.narration or ""
-        import re
-        match = re.search(r'(\d+)\s*x', desc)
-        if match:
-            qty = int(match.group(1))
-
+        if not entry:
+            continue
         movements.append({
-            "line_id": line.id,
+            "id": line.id,
             "entry_id": entry.id,
-            "date": entry.entry_date.strftime("%Y-%m-%d") if hasattr(entry.entry_date, "strftime") else str(entry.entry_date),
-            "reference": entry.reference or f"JE-{entry.id}",
-            "sku": item.sku if item else "—",
-            "item_name": item.name if item else "—",
-            "movement_type": movement_type,
-            "quantity": qty,
-            "amount_npr": line.debit_npr if movement_type == "IN" else line.credit_npr,
-            "narration": entry.narration,
-            "category": entry.category or "GENERAL",
-            "customer": line.customer.name if line.customer else None,
+            "entry_date": entry.entry_date.strftime("%Y-%m-%d") if entry.entry_date else "",
+            "reference": entry.reference or f"JE-{entry.id:04d}",
+            "sku": line.inventory_item.sku if line.inventory_item else "—",
+            "item_name": line.inventory_item.name if line.inventory_item else "—",
+            "movement_type": "STOCK_OUT (SALE)" if line.credit_npr > 0 else "STOCK_IN (PURCHASE)",
+            "amount_npr": line.credit_npr if line.credit_npr > 0 else line.debit_npr,
+            "description": line.description or entry.narration or "—",
+            "customer_name": line.customer.name if line.customer else "—",
         })
 
     return movements
 
 
-import csv
-import io
-from fastapi.responses import StreamingResponse
-
 @router.get("/export/stock-audit-csv")
 def export_stock_audit_csv(db: Session = Depends(get_db)):
     """
     Exports downloadable Stock Audit CSV report containing remaining stock quantities,
-    HS Codes, unit costs, selling prices, and total stock asset valuation for tax auditing.
+    HS Codes, categories, unit costs, selling prices, and total stock asset valuation for tax auditing.
     """
+    comp = get_company_dict(db)
+    comp_name = comp.get("company_name", "COMPANY").upper()
+    comp_pan = comp.get("pan_vat_no", "N/A")
+    prod_plural = comp.get("product_term_plural", "Products").upper()
+
     items = db.query(Inventory).order_by(Inventory.sku.asc()).all()
 
     output = io.StringIO()
     writer = csv.writer(output)
 
-    writer.writerow(["RENEW GEN RESOURCES — INVENTORY STOCK AUDIT & VALUATION REPORT"])
-    writer.writerow([f"Generated Date: {date.today().strftime('%Y-%m-%d')}", "Company PAN: 610464122"])
+    writer.writerow([f"{comp_name} — {prod_plural} STOCK AUDIT & ASSET VALUATION REPORT"])
+    writer.writerow([f"Generated Date: {date.today().strftime('%Y-%m-%d')}", f"Company PAN / VAT: {comp_pan}"])
     writer.writerow([])
     writer.writerow([
-        "Item ID", "SKU", "HS Code", "Product Name", "Brand", "Spec (Voltage / Ah)",
+        "Item ID", "SKU", "HS Code", "Product / Item Name", "Category", "Brand", "Unit (UOM)", "Specifications / Details",
         "Remaining Stock Qty", "Reorder Level", "Stock Status",
         "Import Unit Cost (NPR)", "Selling Price (NPR)", "Total Stock Asset Valuation (NPR)"
     ])
@@ -592,14 +582,18 @@ def export_stock_audit_csv(db: Session = Depends(get_db)):
         total_units += item.stock_qty
         total_inventory_valuation += total_val
         status = "LOW STOCK WARNING" if item.stock_qty <= item.reorder_level else "OK"
-        spec = f"{item.voltage_v or 0}V / {item.capacity_ah or 0}Ah"
+        spec = item.specifications or (f"{item.voltage_v or 0}V / {item.capacity_ah or 0}Ah" if (item.voltage_v or item.capacity_ah) else "—")
+        category = item.category or "General"
+        uom = item.unit_of_measure or "pcs"
 
         writer.writerow([
             item.id,
             item.sku,
             item.hs_code or "N/A",
             item.name,
-            item.brand or "",
+            category,
+            item.brand or "—",
+            uom,
             spec,
             item.stock_qty,
             item.reorder_level,
@@ -611,7 +605,7 @@ def export_stock_audit_csv(db: Session = Depends(get_db)):
 
     writer.writerow([])
     writer.writerow([
-        "TOTAL INVENTORY AUDIT VALUATION", "", "", "", "", "",
+        "TOTAL INVENTORY AUDIT VALUATION", "", "", "", "", "", "", "",
         total_units, "", "", "", "", f"{total_inventory_valuation:.2f}"
     ])
 
@@ -620,5 +614,6 @@ def export_stock_audit_csv(db: Session = Depends(get_db)):
         io.BytesIO(output.getvalue().encode("utf-8")),
         media_type="text/csv"
     )
-    response.headers["Content-Disposition"] = "attachment; filename=renewgen_inventory_stock_audit.csv"
+    safe_filename = comp_name.lower().replace(" ", "_")[:20]
+    response.headers["Content-Disposition"] = f"attachment; filename={safe_filename}_inventory_stock_audit.csv"
     return response

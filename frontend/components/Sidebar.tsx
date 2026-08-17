@@ -4,32 +4,37 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, BookOpen, Package,
   Users, Landmark, BarChart3, Sun, Moon, ShieldCheck,
-  Building2, Truck, ShieldAlert, LogOut, Shield, User as UserIcon, TrendingUp
+  Building2, Truck, ShieldAlert, LogOut, TrendingUp
 } from "lucide-react";
 import { useTheme } from "@/contexts/ThemeContext";
 import { useAuth } from "@/contexts/AuthContext";
-
-const navItems = [
-  { href: "/",           label: "Dashboard",          icon: LayoutDashboard },
-  { href: "/journal",    label: "Journal & Tax",      icon: BookOpen },
-  { href: "/investors",  label: "Investors & Capital",icon: TrendingUp },
-  { href: "/inventory",  label: "Inventory & Stock",  icon: Package },
-  { href: "/warehouses", label: "Warehouses",         icon: Building2 },
-  { href: "/suppliers",  label: "Suppliers & PO",     icon: Truck },
-  { href: "/warranty",   label: "Serials & Warranty", icon: ShieldAlert },
-  { href: "/customers",  label: "Customers",          icon: Users },
-  { href: "/loans",      label: "Bank Loans",         icon: Landmark },
-  { href: "/analytics",  label: "Analytics",          icon: BarChart3 },
-  { href: "/settings",   label: "Data & Backup",      icon: ShieldCheck },
-];
+import { useCompany } from "@/contexts/CompanyContext";
 
 export default function Sidebar() {
   const pathname = usePathname();
   const { theme, toggle } = useTheme();
   const { user, logout } = useAuth();
+  const { company } = useCompany();
 
   const isAdmin = user?.role === "ADMIN";
   const isAccountant = user?.role === "ACCOUNTANT";
+
+  const prodTerm = company?.product_term || "Product";
+  const prodTermPlural = company?.product_term_plural || "Products";
+
+  const navItems = [
+    { href: "/",           label: "Dashboard",                   icon: LayoutDashboard },
+    { href: "/journal",    label: "Journal & Tax",               icon: BookOpen },
+    { href: "/investors",  label: "Investors & Capital",         icon: TrendingUp },
+    { href: "/inventory",  label: `${prodTermPlural} & Stock`,   icon: Package },
+    { href: "/warehouses", label: "Warehouses",                  icon: Building2 },
+    { href: "/suppliers",  label: "Suppliers & PO",              icon: Truck },
+    { href: "/warranty",   label: `${prodTerm} Serials`,         icon: ShieldAlert },
+    { href: "/customers",  label: "Customers",                   icon: Users },
+    { href: "/loans",      label: "Bank Loans",                  icon: Landmark },
+    { href: "/analytics",  label: "Analytics",                   icon: BarChart3 },
+    { href: "/settings",   label: "Branding & Backup",           icon: ShieldCheck },
+  ];
 
   return (
     <aside
@@ -51,25 +56,48 @@ export default function Sidebar() {
         transition: "background 0.25s ease, border-color 0.25s ease",
       }}
     >
-      {/* Official Company Logo */}
+      {/* Official Dynamic Company Logo & Brand Header */}
       <div style={{ marginBottom: "1rem", padding: "0 0.25rem", flexShrink: 0 }}>
-        <div style={{
-          background: "#ffffff",
-          padding: "0.5rem 0.75rem",
-          borderRadius: "0.625rem",
-          border: "1px solid rgba(255,255,255,0.15)",
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-        }}>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src="/logo.png"
-            alt="Renew Gen Resources"
-            style={{ width: "100%", maxHeight: "48px", objectFit: "contain" }}
-          />
-        </div>
+        <Link href="/" style={{ textDecoration: "none", display: "block" }}>
+          <div style={{
+            background: "#ffffff",
+            padding: "0.5rem 0.75rem",
+            borderRadius: "0.625rem",
+            border: "1px solid rgba(255,255,255,0.15)",
+            boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            minHeight: "52px",
+          }}>
+            {company.logo_data ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={company.logo_data}
+                alt={company.company_name || "Company Logo"}
+                style={{ width: "100%", maxHeight: "46px", objectFit: "contain" }}
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <div style={{
+                  width: "28px", height: "28px", borderRadius: "6px",
+                  background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  color: "#fff", fontWeight: 800, fontSize: "0.85rem"
+                }}>
+                  {(company.company_name || "ERP")[0]}
+                </div>
+                <span style={{ fontSize: "0.9rem", fontWeight: 800, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {company.company_name || "Corporate ERP"}
+                </span>
+              </div>
+            )}
+          </div>
+        </Link>
       </div>
 
       {/* Navigation Links (Scrollable Container) */}
@@ -94,7 +122,7 @@ export default function Sidebar() {
             .filter(({ href }) => {
               if (isAdmin) return true;
               if (isAccountant) return ["/", "/journal", "/inventory", "/warehouses", "/warranty", "/customers"].includes(href);
-              // STAFF: can access Dashboard, Inventory, Warehouses, Suppliers, Warranty, Customers, and Settings (Data & Backup)
+              // STAFF: can access Dashboard, Inventory, Warehouses, Suppliers, Warranty, Customers, and Settings (Branding & Backup)
               return !["/journal", "/loans", "/analytics", "/investors"].includes(href);
             })
             .map(({ href, label, icon: Icon }) => {

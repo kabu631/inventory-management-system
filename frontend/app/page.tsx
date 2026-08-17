@@ -3,6 +3,7 @@ import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import { api, formatNPR } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import {
   TrendingUp, Package, Landmark, BookOpen, ArrowUpRight, ArrowDownLeft,
   Truck, ShoppingBag, ArrowRightLeft, ShieldAlert, FileSpreadsheet,
@@ -30,6 +31,7 @@ interface JournalEntry {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { company } = useCompany();
   const isAdmin = user?.role === "ADMIN";
   const isAccountant = user?.role === "ACCOUNTANT";
 
@@ -146,19 +148,22 @@ export default function DashboardPage() {
     },
   ] : [];
 
+  const prodTerm = company?.product_term || "Product";
+  const prodTermPlural = company?.product_term_plural || "Products";
+
   const QUICK_ACTIONS = isAccountant
     ? [
-        { title: "Stock Audit & Prices", desc: "Audit remaining stock & price directory", href: "/inventory", icon: Package, color: "#818cf8" },
+        { title: "Stock Audit & Prices", desc: `Audit remaining ${prodTermPlural.toLowerCase()} & price directory`, href: "/inventory", icon: Package, color: "#818cf8" },
         { title: "Tax Clearance Export", desc: "Download IRD tax clearance CSV report", href: "/journal", icon: FileSpreadsheet, color: "#22c55e" },
         { title: "Customer Ledgers", desc: "Audit customer credit limits & receivables", href: "/customers", icon: Users, color: "#3b82f6" },
         { title: "Daily Journal", desc: "Review double-entry accounting ledger", href: "/journal", icon: BookOpen, color: "#f59e0b" },
       ]
     : [
-        { title: "Sell Battery", desc: "Create invoice & deduct stock", href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
-        { title: "Purchase Stock", desc: "Buy stock from suppliers / loans", href: "/inventory", icon: ArrowDownLeft, color: "#22c55e" },
-        { title: "Add New SKU", desc: "Register new battery specifications", href: "/inventory", icon: Package, color: "#3b82f6" },
+        { title: `Sell ${prodTerm}`, desc: `Create invoice & deduct ${prodTerm.toLowerCase()} stock`, href: "/inventory", icon: ShoppingBag, color: "#818cf8" },
+        { title: "Purchase Stock", desc: `Buy ${prodTermPlural.toLowerCase()} stock from suppliers / loans`, href: "/inventory", icon: ArrowDownLeft, color: "#22c55e" },
+        { title: "Add New SKU", desc: `Register new ${prodTerm.toLowerCase()} specifications`, href: "/inventory", icon: Package, color: "#3b82f6" },
         { title: "Data Backup & Sync", desc: "Manual backup & Google Drive sync", href: "/settings", icon: ShieldCheck, color: "#10b981" },
-        { title: "Warranty Claim", desc: "Register serial or process claim", href: "/warranty", icon: ShieldAlert, color: "#ef4444" },
+        { title: "Warranty & Serials", desc: `Register serial or process ${prodTerm.toLowerCase()} claim`, href: "/warranty", icon: ShieldAlert, color: "#ef4444" },
       ];
 
   return (
@@ -168,7 +173,7 @@ export default function DashboardPage() {
         <div className="page-header-info">
           <h1 className="page-title">{isAdmin ? "Corporate Inventory Dashboard" : isAccountant ? "Accountant Audit & Compliance Portal" : "Staff Operations & Sales Portal"}</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
-            Renew Gen Resources ERP — {isAdmin ? "Live Overview & Quick Operations Hub" : isAccountant ? `Welcome, ${user?.full_name || "Accountant"} (${user?.staff_id || "ACC-001"})` : `Welcome, ${user?.full_name || "Staff"} (${user?.staff_id || "EMP-102"})`}
+            {company.company_name || "Corporate"} ERP — {company.business_type ? `${company.business_type} • ` : ""}{isAdmin ? "Live Overview & Quick Operations Hub" : isAccountant ? `Welcome, ${user?.full_name || "Accountant"} (${user?.staff_id || "ACC-001"})` : `Welcome, ${user?.full_name || "Staff"} (${user?.staff_id || "EMP-102"})`}
           </p>
         </div>
 

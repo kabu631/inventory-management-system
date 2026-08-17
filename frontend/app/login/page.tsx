@@ -1,8 +1,9 @@
 "use client";
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { api } from "@/lib/api";
-import { Lock, User, Eye, EyeOff, ArrowRight, AlertCircle } from "lucide-react";
+import { Lock, User, Eye, EyeOff, ArrowRight, AlertCircle, Building2 } from "lucide-react";
 
 interface LoginResponse {
   status: string;
@@ -19,6 +20,7 @@ interface LoginResponse {
 
 export default function LoginPage() {
   const { login } = useAuth();
+  const { company } = useCompany();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -72,7 +74,7 @@ export default function LoginPage() {
           padding: "2.25rem",
         }}
       >
-        {/* Company Header */}
+        {/* Dynamic Company Header */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div
             style={{
@@ -82,20 +84,36 @@ export default function LoginPage() {
               borderRadius: "0.875rem",
               boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
               marginBottom: "1.25rem",
+              alignItems: "center",
+              justifyContent: "center",
+              minHeight: "56px",
+              minWidth: "120px",
             }}
           >
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo.png"
-              alt="Renew Gen Resources"
-              style={{ height: "48px", objectFit: "contain" }}
-            />
+            {company.logo_data ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={company.logo_data}
+                alt={company.company_name || "Company Logo"}
+                style={{ height: "48px", maxHeight: "48px", maxWidth: "200px", objectFit: "contain" }}
+                onError={(e) => {
+                  (e.target as HTMLElement).style.display = "none";
+                }}
+              />
+            ) : (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <Building2 size={24} color="#10b981" />
+                <span style={{ fontSize: "1.1rem", fontWeight: 800, color: "#0f172a" }}>
+                  {company.company_name || "ERP System"}
+                </span>
+              </div>
+            )}
           </div>
           <h1 style={{ fontSize: "1.35rem", fontWeight: 800, color: "#f8fafc", letterSpacing: "-0.02em" }}>
-            Renew Gen Resources
+            {company.company_name || "Corporate ERP Portal"}
           </h1>
           <p style={{ fontSize: "0.825rem", color: "#94a3b8", marginTop: "4px" }}>
-            Corporate Battery &amp; Supply Chain ERP Sign In
+            {company.tagline || "Enterprise Resource Planning & Inventory Management"}
           </p>
         </div>
 
@@ -132,7 +150,7 @@ export default function LoginPage() {
                 type="text"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. renewgenadmin or staff"
+                placeholder="e.g. admin or staff"
                 className="input"
                 style={{ paddingLeft: "2.5rem" }}
                 id="login-username-input"

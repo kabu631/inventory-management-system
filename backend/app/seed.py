@@ -15,6 +15,7 @@ from app.models import (
     Customer, Inventory, AccountHead, JournalEntry,
     JournalLine, BankLoan, LoanRepayment, User,
 )
+from app.routers.company import ensure_default_company_settings
 from app.services.auth import hash_password
 
 random.seed(42)
@@ -94,6 +95,8 @@ ACCOUNT_HEADS = [
 def seed():
     db = SessionLocal()
     try:
+        ensure_default_company_settings(db)
+
         # Check if already seeded
         if db.query(Customer).count() > 0:
             print("Database already seeded. Skipping.")

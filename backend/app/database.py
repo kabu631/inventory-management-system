@@ -52,6 +52,21 @@ def init_db():
                 conn.exec_driver_sql("ALTER TABLE inventory ADD COLUMN warranty_months INTEGER DEFAULT 24")
             if "hs_code" not in inv_cols:
                 conn.exec_driver_sql("ALTER TABLE inventory ADD COLUMN hs_code VARCHAR(20)")
+            if "category" not in inv_cols:
+                conn.exec_driver_sql("ALTER TABLE inventory ADD COLUMN category VARCHAR(100)")
+            if "unit_of_measure" not in inv_cols:
+                conn.exec_driver_sql("ALTER TABLE inventory ADD COLUMN unit_of_measure VARCHAR(50) DEFAULT 'pcs'")
+            if "specifications" not in inv_cols:
+                conn.exec_driver_sql("ALTER TABLE inventory ADD COLUMN specifications TEXT")
+
+            pragma_comp = conn.exec_driver_sql("PRAGMA table_info(company_settings)").fetchall()
+            comp_cols = [row[1] for row in pragma_comp]
+            if "business_type" not in comp_cols:
+                conn.exec_driver_sql("ALTER TABLE company_settings ADD COLUMN business_type VARCHAR(150) DEFAULT 'Commercial Trading & Distribution'")
+            if "product_term" not in comp_cols:
+                conn.exec_driver_sql("ALTER TABLE company_settings ADD COLUMN product_term VARCHAR(50) DEFAULT 'Product'")
+            if "product_term_plural" not in comp_cols:
+                conn.exec_driver_sql("ALTER TABLE company_settings ADD COLUMN product_term_plural VARCHAR(50) DEFAULT 'Products'")
 
             pragma_cust = conn.exec_driver_sql("PRAGMA table_info(customers)").fetchall()
             cust_cols = [row[1] for row in pragma_cust]

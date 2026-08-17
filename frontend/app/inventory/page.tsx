@@ -2,17 +2,28 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api, formatNPR } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { useCompany } from "@/contexts/CompanyContext";
 import { AlertTriangle, Plus, Search, TrendingUp, Package, ShoppingBag, ArrowDownLeft, X, CheckCircle2, AlertCircle, Lock, Unlock, Eye, EyeOff, Pencil } from "lucide-react";
 
 const INVENTORY_PIN = process.env.NEXT_PUBLIC_DASHBOARD_PIN ?? "1234";
 
 interface Item {
-  id: number; sku: string; name: string; brand: string;
-  capacity_ah: number; voltage_v: number;
-  import_cost_npr: number; selling_price_npr: number;
-  stock_qty: number; reorder_level: number;
+  id: number;
+  sku: string;
+  name: string;
+  category?: string;
+  brand?: string;
+  unit_of_measure?: string;
+  specifications?: string;
+  capacity_ah?: number;
+  voltage_v?: number;
+  import_cost_npr: number;
+  selling_price_npr: number;
+  stock_qty: number;
+  reorder_level: number;
   hs_code?: string;
-  inventory_value_npr: number; low_stock: boolean;
+  inventory_value_npr: number;
+  low_stock: boolean;
 }
 
 interface Customer {
@@ -37,6 +48,10 @@ interface InvestorRecord {
 
 export default function InventoryPage() {
   const { user } = useAuth();
+  const { company } = useCompany();
+  const prodTerm = company?.product_term || "Product";
+  const prodTermPlural = company?.product_term_plural || "Products";
+
   const isAdmin = user?.role === "ADMIN";
   const isAccountant = user?.role === "ACCOUNTANT";
   const isStaff = user?.role === "STAFF";
@@ -107,7 +122,8 @@ export default function InventoryPage() {
 
   // Add SKU form
   const [form, setForm] = useState({
-    sku: "", name: "", brand: "", capacity_ah: "", voltage_v: "",
+    sku: "", name: "", category: "", brand: "", unit_of_measure: "pcs", specifications: "",
+    capacity_ah: "", voltage_v: "",
     import_cost_npr: "", selling_price_npr: "", stock_qty: "", reorder_level: "5", hs_code: "",
   });
   const [error, setError] = useState("");
@@ -116,7 +132,8 @@ export default function InventoryPage() {
   // Edit SKU form state
   const [editingItem, setEditingItem] = useState<Item | null>(null);
   const [editForm, setEditForm] = useState({
-    name: "", brand: "", capacity_ah: "", voltage_v: "",
+    name: "", category: "", brand: "", unit_of_measure: "pcs", specifications: "",
+    capacity_ah: "", voltage_v: "",
     import_cost_npr: "", selling_price_npr: "", stock_qty: "", reorder_level: "5", hs_code: "",
   });
   const [editError, setEditError] = useState("");
@@ -126,7 +143,10 @@ export default function InventoryPage() {
     setEditingItem(item);
     setEditForm({
       name: item.name,
+      category: item.category || "",
       brand: item.brand || "",
+      unit_of_measure: item.unit_of_measure || "pcs",
+      specifications: item.specifications || "",
       capacity_ah: String(item.capacity_ah ?? ""),
       voltage_v: String(item.voltage_v ?? ""),
       import_cost_npr: String(item.import_cost_npr ?? ""),
@@ -141,15 +161,18 @@ export default function InventoryPage() {
   async function handleSaveEditSku() {
     if (!editingItem) return;
     if (!editForm.name.trim()) {
-      setEditError("Product Name is required");
+      setEditError(`${prodTerm} Name is required`);
       return;
     }
     setEditSubmitting(true);
     setEditError("");
     try {
       await api.patch(`/api/inventory/${editingItem.id}`, {
-        name: editForm.name,
-        brand: editForm.brand || null,
+        name: editForm.name.trim(),
+        category: editForm.category.trim() || null,
+        brand: editForm.brand.trim() || null,
+        unit_of_measure: editForm.unit_of_measure.trim() || "pcs",
+        specifications: editForm.specifications.trim() || null,
         capacity_ah: editForm.capacity_ah ? Number(editForm.capacity_ah) : null,
         voltage_v: editForm.voltage_v ? Number(editForm.voltage_v) : null,
         import_cost_npr: editForm.import_cost_npr ? Number(editForm.import_cost_npr) : undefined,
@@ -250,14 +273,23 @@ export default function InventoryPage() {
     setError(""); setSubmitting(true);
     try {
       await api.post("/api/inventory/", {
-        ...form,
-        capacity_ah: Number(form.capacity_ah), voltage_v: Number(form.voltage_v),
-        import_cost_npr: Number(form.import_cost_npr), selling_price_npr: Number(form.selling_price_npr),
-        stock_qty: Number(form.stock_qty), reorder_level: Number(form.reorder_level),
+        sku: form.sku.trim(),
+        name: form.name.trim(),
+        category: form.category.trim() || null,
+        brand: form.brand.trim() || null,
+        unit_of_measure: form.unit_of_measure.trim() || "pcs",
+        specifications: form.specifications.trim() || null,
+        capacity_ah: form.capacity_ah ? Number(form.capacity_ah) : null,
+        voltage_v: form.voltage_v ? Number(form.voltage_v) : null,
+        import_cost_npr: Number(form.import_cost_npr) || 0,
+        selling_price_npr: Number(form.selling_price_npr) || 0,
+        stock_qty: Number(form.stock_qty) || 0,
+        reorder_level: Number(form.reorder_level) || 5,
+        hs_code: form.hs_code.trim() || null,
       });
       setShowForm(false);
-      setForm({ sku:"",name:"",brand:"",capacity_ah:"",voltage_v:"",import_cost_npr:"",selling_price_npr:"",stock_qty:"",reorder_level:"5",hs_code:"" });
-      flashMsg("New battery SKU added successfully!", "success");
+      setForm({ sku:"", name:"", category:"", brand:"", unit_of_measure:"pcs", specifications:"", capacity_ah:"", voltage_v:"", import_cost_npr:"", selling_price_npr:"", stock_qty:"", reorder_level:"5", hs_code:"" });
+      flashMsg(`New ${prodTerm} SKU added successfully!`, "success");
       load();
     } catch(e: unknown) { setError(e instanceof Error ? e.message : "Failed to add item"); }
     finally { setSubmitting(false); }
@@ -479,21 +511,26 @@ export default function InventoryPage() {
       : "0.0";
 
   const FIELDS: [string, string, string, string][] = [
-    ["sku","SKU *","LFP-12-100","text"], ["name","Name *","LFP 12V 100Ah Battery","text"],
-    ["brand","Brand","PowerNep","text"], ["hs_code","HS Code (Tax Audit)","8507.60","text"],
-    ["capacity_ah","Capacity (Ah)","100","number"], ["voltage_v","Voltage (V)","12","number"],
-    ...(canAddSku ? [["import_cost_npr","Import Cost NPR","18000","number"] as [string, string, string, string]] : []),
-    ["selling_price_npr","Selling Price NPR","24000","number"], ["stock_qty","Stock Qty","0","number"],
-    ["reorder_level","Reorder Level","5","number"],
+    ["sku", "SKU Code *", "e.g. SKU-1001", "text"],
+    ["name", `${prodTerm} Name *`, `${prodTerm} Title or Description`, "text"],
+    ["category", "Category", "e.g. Electronics, Tools, Apparel, Energy", "text"],
+    ["brand", "Brand / Maker", "e.g. Brand Name", "text"],
+    ["unit_of_measure", "Unit of Measure", "pcs, kg, box, sets, meters", "text"],
+    ["specifications", "Specifications / Variant", "Size, Color, Model, Rating or Specs", "text"],
+    ["hs_code", "HS Code (Tax Audit)", "e.g. 8507.60", "text"],
+    ...(canAddSku ? [["import_cost_npr", "Import Cost NPR", "18000", "number"] as [string, string, string, string]] : []),
+    ["selling_price_npr", "Selling Price NPR", "24000", "number"],
+    ["stock_qty", "Initial Stock Qty", "0", "number"],
+    ["reorder_level", "Reorder Level", "5", "number"],
   ];
 
   return (
     <div>
       <div className="page-header">
         <div className="page-header-info">
-          <h1 className="page-title">{isAdmin ? "Inventory & Stock Management" : isAccountant ? "Stock Audit & Price Directory" : "Product Catalog & Sales Portal"}</h1>
+          <h1 className="page-title">{isAdmin ? `${prodTermPlural} & Stock Management` : isAccountant ? "Stock Audit & Price Directory" : `${prodTerm} Catalog & Sales Portal`}</h1>
           <p className="text-muted" style={{ fontSize: "0.875rem", marginTop: "0.25rem" }}>
-            {isAdmin ? "Purchase Inventory using Bank Loan Funds & Manage Stock" : isAccountant ? "Audit Remaining Stock Quantities & Customer Selling Prices" : "Check Battery Prices & Issue Customer Invoices"}
+            {isAdmin ? `Manage ${prodTermPlural.toLowerCase()} catalog, purchase inventory, and track stock valuation.` : isAccountant ? `Audit remaining ${prodTermPlural.toLowerCase()} stock & customer selling prices` : `Check ${prodTerm.toLowerCase()} prices & issue customer invoices`}
           </p>
         </div>
         <div className="page-actions">
@@ -573,7 +610,7 @@ export default function InventoryPage() {
         {[
           isAdmin
             ? { label: "Total Inventory Value", value: mask(formatNPR(totalValue)), isFinancial: true, color: "#6366f1", icon: Package }
-            : { label: "Total Catalog Items",   value: `${items.length} Battery SKUs`, isFinancial: false, color: "#6366f1", icon: Package },
+            : { label: "Total Catalog Items",   value: `${items.length} ${prodTermPlural}`, isFinancial: false, color: "#6366f1", icon: Package },
           { label: "Total Units in Stock",  value: `${totalUnits.toLocaleString()} units`, isFinancial: false, color: "#22c55e", icon: TrendingUp },
           { label: "Low Stock Items",       value: `${lowStockCount} SKUs`, isFinancial: false, color: lowStockCount > 0 ? "#ef4444" : "#22c55e", icon: AlertTriangle },
         ].map(k => (
@@ -609,7 +646,7 @@ export default function InventoryPage() {
       {/* Add SKU Form */}
       {showForm && (
         <div className="card" style={{ padding: "1.5rem", marginBottom: "1.5rem" }}>
-          <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1rem" }}>Add Battery SKU</h2>
+          <h2 style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "1rem" }}>Add {prodTerm} SKU</h2>
           {error && <div className="alert alert-error" style={{ marginBottom: "0.75rem" }}>{error}</div>}
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3,1fr)", gap: "0.75rem", marginBottom: "1rem" }}>
             {FIELDS.map(([key, label, placeholder, type]) => (
@@ -645,9 +682,9 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <h2 style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--text-primary)", margin: 0 }}>
-                    Edit SKU: <span style={{ color: "#818cf8" }}>{editingItem.sku}</span>
+                    Edit {prodTerm}: <span style={{ color: "#818cf8" }}>{editingItem.sku}</span>
                   </h2>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>Update battery specifications, stock count, and selling price</p>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>Update specifications, category, stock count, and selling price</p>
                 </div>
               </div>
               <button onClick={() => setEditingItem(null)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={18} /></button>
@@ -657,9 +694,9 @@ export default function InventoryPage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.875rem", marginBottom: "1.25rem" }}>
               <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Product Name *</label>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>{prodTerm} Name *</label>
                 <input
-                  type="text" className="input" placeholder="Battery Name"
+                  type="text" className="input" placeholder={`${prodTerm} Name`}
                   value={editForm.name}
                   onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
                   id="edit-sku-name"
@@ -667,12 +704,42 @@ export default function InventoryPage() {
               </div>
 
               <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Brand</label>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Category</label>
                 <input
-                  type="text" className="input" placeholder="e.g. PowerNep / Exide"
+                  type="text" className="input" placeholder="e.g. Electronics / Energy / Tools"
+                  value={editForm.category}
+                  onChange={e => setEditForm(f => ({ ...f, category: e.target.value }))}
+                  id="edit-sku-category"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Brand / Maker</label>
+                <input
+                  type="text" className="input" placeholder="e.g. OEM / Brand"
                   value={editForm.brand}
                   onChange={e => setEditForm(f => ({ ...f, brand: e.target.value }))}
                   id="edit-sku-brand"
+                />
+              </div>
+
+              <div>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Unit of Measure (UOM)</label>
+                <input
+                  type="text" className="input" placeholder="pcs, kg, box, sets"
+                  value={editForm.unit_of_measure}
+                  onChange={e => setEditForm(f => ({ ...f, unit_of_measure: e.target.value }))}
+                  id="edit-sku-uom"
+                />
+              </div>
+
+              <div style={{ gridColumn: "span 2" }}>
+                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Specifications / Technical Details</label>
+                <input
+                  type="text" className="input" placeholder="Size, Model, Specs, Rating, Variant"
+                  value={editForm.specifications}
+                  onChange={e => setEditForm(f => ({ ...f, specifications: e.target.value }))}
+                  id="edit-sku-specs"
                 />
               </div>
 
@@ -683,26 +750,6 @@ export default function InventoryPage() {
                   value={editForm.hs_code}
                   onChange={e => setEditForm(f => ({ ...f, hs_code: e.target.value }))}
                   id="edit-sku-hs"
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Capacity (Ah)</label>
-                <input
-                  type="number" className="input" placeholder="e.g. 100"
-                  value={editForm.capacity_ah}
-                  onChange={e => setEditForm(f => ({ ...f, capacity_ah: e.target.value }))}
-                  id="edit-sku-capacity"
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: "0.72rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>Voltage (V)</label>
-                <input
-                  type="number" className="input" placeholder="e.g. 12"
-                  value={editForm.voltage_v}
-                  onChange={e => setEditForm(f => ({ ...f, voltage_v: e.target.value }))}
-                  id="edit-sku-voltage"
                 />
               </div>
 
@@ -752,7 +799,7 @@ export default function InventoryPage() {
             <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end", borderTop: "1px solid var(--border)", paddingTop: "1rem" }}>
               <button className="btn btn-ghost" onClick={() => setEditingItem(null)}>Cancel</button>
               <button className="btn btn-primary" onClick={handleSaveEditSku} disabled={editSubmitting} id="update-sku-btn">
-                {editSubmitting ? "Saving Changes..." : "Update SKU Details"}
+                {editSubmitting ? "Saving Changes..." : `Update ${prodTerm} Details`}
               </button>
             </div>
           </div>
@@ -791,7 +838,7 @@ export default function InventoryPage() {
               {/* Product selection */}
               <div>
                 <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
-                  Select Battery Product to Buy *
+                  Select {prodTerm} to Buy *
                 </label>
                 <select
                   className="input"
@@ -927,7 +974,7 @@ export default function InventoryPage() {
               <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 <ShoppingBag size={20} color="#818cf8" />
                 <h2 style={{ fontWeight: 600, color: "var(--text-primary)", fontSize: "1.1rem" }}>
-                  Sell Battery / Product Invoice
+                  Sell {prodTerm} / Customer Invoice
                 </h2>
               </div>
               <button onClick={() => setShowSaleModal(false)} style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer" }}><X size={18} /></button>
@@ -1060,7 +1107,7 @@ export default function InventoryPage() {
 
               <div>
                 <label style={{ fontSize: "0.75rem", color: "var(--text-muted)", display: "block", marginBottom: "0.3rem", fontWeight: 600 }}>
-                  Select Battery Product *
+                  Select {prodTerm} *
                 </label>
                 <select
                   className="input"
@@ -1329,7 +1376,13 @@ export default function InventoryPage() {
             <table className="data-table">
             <thead>
               <tr>
-                <th>SKU</th><th>HS Code</th><th>Name</th><th>Brand</th><th>Spec</th>
+                <th>SKU</th>
+                <th>HS Code</th>
+                <th>{prodTerm} Name</th>
+                <th>Category</th>
+                <th>Brand</th>
+                <th>Unit</th>
+                <th>Specifications</th>
                 {isAdmin && <th style={{ textAlign: "right" }}>Import Cost</th>}
                 <th style={{ textAlign: "right" }}>Selling Price</th>
                 {isAdmin && <th style={{ textAlign: "right" }}>Margin</th>}
@@ -1344,9 +1397,11 @@ export default function InventoryPage() {
                 <tr key={item.id}>
                   <td><code style={{ fontSize: "0.75rem", color: "#818cf8" }}>{item.sku}</code></td>
                   <td><code style={{ fontSize: "0.75rem", color: "#22c55e" }}>{item.hs_code || "—"}</code></td>
-                  <td style={{ fontWeight: 500 }}>{item.name}</td>
-                  <td className="text-muted">{item.brand}</td>
-                  <td className="text-faint" style={{ fontSize: "0.8rem" }}>{item.voltage_v}V / {item.capacity_ah}Ah</td>
+                  <td style={{ fontWeight: 600 }}>{item.name}</td>
+                  <td><span style={{ fontSize: "0.72rem", background: "rgba(99,102,241,0.1)", color: "#818cf8", padding: "2px 6px", borderRadius: "4px", fontWeight: 600 }}>{item.category || "General"}</span></td>
+                  <td className="text-muted">{item.brand || "—"}</td>
+                  <td><span style={{ fontSize: "0.72rem", color: "var(--text-muted)", background: "rgba(255,255,255,0.06)", padding: "2px 6px", borderRadius: "4px" }}>{item.unit_of_measure || "pcs"}</span></td>
+                  <td className="text-faint" style={{ fontSize: "0.8rem" }}>{item.specifications || ((item.voltage_v || item.capacity_ah) ? `${item.voltage_v || 0}V / ${item.capacity_ah || 0}Ah` : "—")}</td>
                   {isAdmin && (
                     <td style={{ textAlign: "right", ...blurStyle }} className="text-muted">
                       {mask(formatNPR(item.import_cost_npr))}

@@ -4,13 +4,14 @@ import "./globals.css";
 import Sidebar from "@/components/Sidebar";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { CompanyProvider } from "@/contexts/CompanyContext";
 import AppLayoutWrapper from "@/components/AppLayoutWrapper";
 
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Renew Gen Resources",
-  description: "Renew Gen Resources ERP System",
+  title: "Corporate ERP System",
+  description: "Enterprise Resource Planning & Inventory Management System",
   icons: {
     icon: "/logo.png",
     shortcut: "/logo.png",
@@ -30,9 +31,11 @@ export default function RootLayout({
         style={{ background: "var(--bg-root)", color: "var(--text-primary)", minHeight: "100vh" }}
       >
         <ThemeProvider>
-          <AuthProvider>
-            <AppLayoutWrapper>{children}</AppLayoutWrapper>
-          </AuthProvider>
+          <CompanyProvider>
+            <AuthProvider>
+              <AppLayoutWrapper>{children}</AppLayoutWrapper>
+            </AuthProvider>
+          </CompanyProvider>
         </ThemeProvider>
       </body>
     </html>
